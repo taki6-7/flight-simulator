@@ -2,161 +2,349 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>World Flight Simulator</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-    canvas { display: block; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#000;
+      font-family:'Courier New', monospace; touch-action:none; user-select:none; }
 
+    #map { position:fixed; inset:0; }
+
+    /* ── API Key Screen ── */
+    #api-screen {
+      position:fixed; inset:0; z-index:200;
+      background:linear-gradient(160deg,#050a1a 0%,#0a0520 100%);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:28px; color:#fff; text-align:center;
+    }
+    #api-screen .logo { font-size:48px; margin-bottom:8px; }
+    #api-screen h1 { font-size:22px; letter-spacing:3px; color:#00ccff; margin-bottom:6px; }
+    #api-screen .sub { font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:28px; letter-spacing:1px; }
+    #api-screen .card {
+      width:100%; max-width:400px; background:rgba(255,255,255,0.05);
+      border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:24px; margin-bottom:16px;
+    }
+    #api-screen label { display:block; font-size:11px; color:rgba(255,255,255,0.5);
+      letter-spacing:1px; text-align:left; margin-bottom:8px; }
+    #api-key-input {
+      width:100%; padding:13px 14px; font-size:13px; letter-spacing:0.5px;
+      background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2);
+      border-radius:8px; color:#fff; outline:none; margin-bottom:14px;
+    }
+    #api-key-input::placeholder { color:rgba(255,255,255,0.25); }
+    #api-key-input:focus { border-color:rgba(0,200,255,0.5); }
+    #start-btn {
+      width:100%; padding:15px; font-size:15px; font-weight:bold; letter-spacing:2px;
+      background:linear-gradient(135deg,#0088ff,#0044cc); border:none; border-radius:9px;
+      color:#fff; cursor:pointer;
+    }
+    #api-note { font-size:11px; color:rgba(255,255,255,0.35); line-height:1.7; max-width:340px; }
+    #api-note a { color:#00aaff; }
+    #api-error { display:none; margin-top:12px; color:#ff5555; font-size:12px; }
+
+    /* ── Aircraft overlay ── */
+    #aircraft-wrap {
+      position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%) rotate(0deg);
+      pointer-events:none; z-index:10;
+    }
+
+    /* ── HUD ── */
     #hud {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      pointer-events: none; color: #00ff88; text-shadow: 0 0 8px #00ff88;
+      position:fixed; inset:0; z-index:20; pointer-events:none;
+      color:#00ff88; font-family:'Courier New',monospace;
+    }
+    .glass {
+      background:rgba(0,0,0,0.45); border:1px solid rgba(0,255,136,0.25);
+      border-radius:8px; backdrop-filter:blur(6px);
     }
 
-    #top-bar {
-      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
-      text-align: center; font-size: 13px; letter-spacing: 2px; opacity: 0.85;
+    /* Top bar */
+    #hud-top {
+      position:absolute; top:14px; left:50%; transform:translateX(-50%);
+      padding:7px 18px; text-align:center; min-width:180px;
     }
-    #location { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+    #hud-title { font-size:10px; letter-spacing:3px; color:rgba(0,255,136,0.6); }
+    #hud-location { font-size:11px; color:rgba(0,255,136,0.85); margin-top:2px; letter-spacing:1px; }
 
-    #left-panel {
-      position: absolute; top: 50%; left: 20px; transform: translateY(-50%);
-      font-size: 12px; line-height: 1.8;
+    /* Speed tape (left) */
+    #speed-tape {
+      position:absolute; left:12px; top:50%; transform:translateY(-50%);
+      width:60px; padding:8px 6px; text-align:center;
     }
-    #right-panel {
-      position: absolute; top: 50%; right: 20px; transform: translateY(-50%);
-      font-size: 12px; line-height: 1.8; text-align: right;
+    /* Alt tape (right) */
+    #alt-tape {
+      position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      width:64px; padding:8px 6px; text-align:right;
     }
+    .tape-label { font-size:9px; color:rgba(0,204,102,0.7); letter-spacing:1px; }
+    .tape-val { font-size:18px; font-weight:bold; line-height:1.1;
+      text-shadow:0 0 8px #00ff88; }
+    .tape-unit { font-size:9px; color:rgba(0,255,136,0.6); }
+    .tape-sep { margin:5px 0; border-top:1px solid rgba(0,255,136,0.15); }
+    .tape-sub-label { font-size:8px; color:rgba(0,204,102,0.5); letter-spacing:1px; margin-top:4px; }
+    .tape-sub-val { font-size:12px; color:rgba(0,255,136,0.8); }
 
-    .hud-label { color: #00cc66; font-size: 10px; letter-spacing: 1px; }
-    .hud-value { font-size: 16px; font-weight: bold; }
-
-    #artificial-horizon {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 120px; height: 120px;
-    }
+    /* Compass */
     #compass {
-      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-      font-size: 13px; letter-spacing: 4px;
+      position:absolute; bottom:164px; left:50%; transform:translateX(-50%);
+      padding:5px 14px; text-align:center; min-width:200px;
     }
-    #compass-rose {
-      width: 200px; height: 30px; border: 1px solid #00ff8844;
-      border-radius: 4px; overflow: hidden; position: relative;
+    #compass-bar {
+      width:100%; height:24px; overflow:hidden; position:relative;
+      background:rgba(0,0,0,0.3); border-radius:4px;
     }
     #compass-tape {
-      position: absolute; top: 0; white-space: nowrap; font-size: 11px;
-      line-height: 30px; padding: 0 100px;
+      position:absolute; top:0; height:100%;
+      display:flex; align-items:center; white-space:nowrap;
+      color:#00ff88; font-size:10px; letter-spacing:2px;
+      text-shadow:0 0 6px #00ff88;
     }
-    #compass-center {
-      position: absolute; top: 0; left: 50%; width: 2px; height: 100%;
-      background: #ff4444; transform: translateX(-50%);
+    #compass-ptr {
+      position:absolute; left:50%; top:0; width:2px; height:100%;
+      background:#ff4444; box-shadow:0 0 6px #ff4444; transform:translateX(-50%);
+    }
+    #compass-hdg {
+      font-size:13px; font-weight:bold; text-align:center; margin-top:3px;
+      text-shadow:0 0 8px #00ff88; letter-spacing:2px;
     }
 
-    #controls-hint {
-      position: absolute; bottom: 16px; right: 16px;
-      font-size: 10px; color: #00ff8855; line-height: 1.8; text-align: right;
+    /* Pitch ladder */
+    #pitch-ladder {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      pointer-events:none; z-index:12;
     }
 
-    #crosshair {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 20px; height: 20px;
+    /* Stall warning */
+    #stall {
+      position:absolute; top:22%; left:50%; transform:translateX(-50%);
+      color:#ff3333; font-size:20px; font-weight:bold; letter-spacing:4px;
+      text-shadow:0 0 20px #ff3333; display:none; animation:blink 0.4s infinite;
     }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: #00ff8888;
-    }
-    #crosshair::before { width: 100%; height: 1px; top: 50%; left: 0; }
-    #crosshair::after { width: 1px; height: 100%; left: 50%; top: 0; }
-
-    #stall-warning {
-      position: absolute; top: 30%; left: 50%; transform: translateX(-50%);
-      color: #ff4444; font-size: 24px; font-weight: bold; letter-spacing: 4px;
-      text-shadow: 0 0 20px #ff4444; display: none; animation: blink 0.5s infinite;
+    /* Gear warning */
+    #gear-warn {
+      position:absolute; top:30%; left:50%; transform:translateX(-50%);
+      color:#ffaa00; font-size:13px; letter-spacing:2px;
+      text-shadow:0 0 12px #ffaa00; display:none;
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-    #throttle-bar-container {
-      position: absolute; bottom: 80px; left: 20px;
+    /* ── Joystick ── */
+    #joystick-zone {
+      position:fixed; bottom:16px; left:16px; z-index:30;
+      width:144px;
     }
-    #throttle-bar {
-      width: 10px; height: 100px; border: 1px solid #00ff8844;
-      border-radius: 4px; overflow: hidden; display: flex; flex-direction: column-reverse;
+    #joystick-base {
+      width:144px; height:144px; border-radius:50%;
+      background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.18);
+      position:relative;
+    }
+    #joystick-knob {
+      width:54px; height:54px; border-radius:50%;
+      background:rgba(0,160,255,0.45); border:2px solid rgba(0,200,255,0.7);
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      box-shadow:0 0 18px rgba(0,160,255,0.35);
+    }
+    #joystick-label { text-align:center; color:rgba(255,255,255,0.35); font-size:9px;
+      letter-spacing:2px; margin-top:5px; }
+
+    /* ── Throttle ── */
+    #throttle-zone {
+      position:fixed; bottom:16px; right:80px; z-index:30;
+      width:44px;
+    }
+    #thr-label { text-align:center; font-size:9px; color:rgba(0,255,136,0.5);
+      letter-spacing:1px; margin-bottom:4px; }
+    #throttle-track {
+      width:16px; height:144px; margin:0 auto;
+      background:rgba(0,0,0,0.4); border:1px solid rgba(0,255,136,0.25);
+      border-radius:8px; position:relative;
     }
     #throttle-fill {
-      width: 100%; background: #00ff88; transition: height 0.1s;
+      position:absolute; bottom:0; left:0; width:100%;
+      background:linear-gradient(to top,#00ff88,#00aaff);
+      border-radius:8px; transition:height 0.05s;
     }
+    #throttle-handle {
+      position:absolute; left:50%; transform:translateX(-50%);
+      width:32px; height:20px; border-radius:5px;
+      background:rgba(0,200,150,0.7); border:1px solid rgba(0,255,136,0.6);
+      box-shadow:0 0 10px rgba(0,255,136,0.2);
+    }
+    #thr-pct { text-align:center; font-size:11px; color:#00ff88;
+      text-shadow:0 0 6px #00ff88; margin-top:4px; }
 
-    #minimap {
-      position: absolute; bottom: 20px; left: 20px;
-      width: 140px; height: 140px; border: 1px solid #00ff8844;
-      border-radius: 50%; overflow: hidden; background: rgba(0,20,10,0.6);
+    /* ── Control buttons ── */
+    #ctrl-btns {
+      position:fixed; bottom:16px; right:12px; z-index:30;
+      display:flex; flex-direction:column; gap:7px; width:60px;
     }
-    #minimap canvas { width: 140px; height: 140px; }
+    .ctrl-btn {
+      width:60px; height:38px; border-radius:7px;
+      border:1px solid rgba(255,255,255,0.25); background:rgba(0,0,0,0.5);
+      color:rgba(255,255,255,0.65); font-size:9px; letter-spacing:1px;
+      font-family:'Courier New',monospace; cursor:pointer;
+      backdrop-filter:blur(4px); pointer-events:auto;
+    }
+    .ctrl-btn.on { border-color:#ffcc00; color:#ffcc00;
+      background:rgba(255,200,0,0.18); box-shadow:0 0 10px rgba(255,200,0,0.2); }
+    .ctrl-btn.warn { border-color:#ff6600; color:#ff6600; }
+
+    /* ── Bank indicator ── */
+    #bank-indicator {
+      position:absolute; top:38%; left:50%; transform:translateX(-50%);
+      pointer-events:none;
+    }
   </style>
 </head>
 <body>
-  <canvas id="c"></canvas>
 
-  <div id="hud">
-    <div id="top-bar">
-      <div>WORLD FLIGHT SIMULATOR</div>
-      <div id="location">--</div>
-    </div>
+<!-- API Key Entry Screen -->
+<div id="api-screen">
+  <div class="logo">✈️</div>
+  <h1>FLIGHT SIMULATOR</h1>
+  <div class="sub">POWERED BY GOOGLE MAPS</div>
+  <div class="card">
+    <label>GOOGLE MAPS API KEY</label>
+    <input id="api-key-input" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off">
+    <button id="start-btn">TAKE OFF</button>
+    <div id="api-error">APIキーが無効です。もう一度確認してください。</div>
+  </div>
+  <p id="api-note">
+    <a href="https://console.cloud.google.com/google/maps-apis/" target="_blank">Google Cloud Console</a>
+    でMaps JavaScript APIを有効にしてAPIキーを取得してください。<br>
+    キーはブラウザに保存されます。
+  </p>
+</div>
 
-    <div id="left-panel">
-      <div class="hud-label">ALTITUDE</div>
-      <div class="hud-value" id="alt">0 m</div>
-      <br>
-      <div class="hud-label">AIRSPEED</div>
-      <div class="hud-value" id="spd">0 kts</div>
-      <br>
-      <div class="hud-label">V/SPEED</div>
-      <div class="hud-value" id="vspd">0 m/s</div>
-    </div>
+<!-- Google Maps container -->
+<div id="map"></div>
 
-    <div id="right-panel">
-      <div class="hud-label">HEADING</div>
-      <div class="hud-value" id="hdg">000°</div>
-      <br>
-      <div class="hud-label">PITCH</div>
-      <div class="hud-value" id="pitch">0.0°</div>
-      <br>
-      <div class="hud-label">BANK</div>
-      <div class="hud-value" id="bank">0.0°</div>
-    </div>
+<!-- Aircraft SVG (centered on screen) -->
+<div id="aircraft-wrap">
+  <svg viewBox="-30 -55 60 110" width="72" height="132" xmlns="http://www.w3.org/2000/svg">
+    <!-- Shadow/glow -->
+    <ellipse cx="0" cy="-5" rx="28" ry="44" fill="rgba(0,0,0,0.15)" transform="translate(2,2)"/>
+    <!-- Fuselage -->
+    <ellipse cx="0" cy="-10" rx="5.5" ry="42" fill="#e8eef8"/>
+    <ellipse cx="0" cy="-10" rx="4" ry="40" fill="#d0daea"/>
+    <!-- Nose -->
+    <ellipse cx="0" cy="-50" rx="5.5" ry="6" fill="#c8d4e8"/>
+    <!-- Wings -->
+    <path d="M-30,2 L30,2 L18,-8 L-18,-8 Z" fill="#c0ccd8" stroke="#b0bcc8" stroke-width="0.5"/>
+    <!-- Wing detail -->
+    <line x1="-28" y1="1" x2="-18" y2="-7" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>
+    <line x1="28" y1="1" x2="18" y2="-7" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>
+    <!-- Winglets -->
+    <path d="M-30,2 L-32,-3 L-28,-4 L-28,2 Z" fill="#b0bcc8"/>
+    <path d="M30,2 L32,-3 L28,-4 L28,2 Z" fill="#b0bcc8"/>
+    <!-- Engine pods -->
+    <ellipse cx="-16" cy="-2" rx="4.5" ry="11" fill="#9aa8b8"/>
+    <ellipse cx="16" cy="-2" rx="4.5" ry="11" fill="#9aa8b8"/>
+    <ellipse cx="-16" cy="-12" rx="3.5" ry="2.5" fill="#7a8898"/>
+    <ellipse cx="16" cy="-12" rx="3.5" ry="2.5" fill="#7a8898"/>
+    <!-- Tail fins -->
+    <path d="M-10,34 L10,34 L6,24 L-6,24 Z" fill="#c0ccd8"/>
+    <path d="M0,22 L0,38 L-4,36 L-4,22 Z" fill="#b0bcc8"/>
+    <path d="M0,22 L0,38 L4,36 L4,22 Z" fill="#b0bcc8"/>
+    <!-- Cockpit windows -->
+    <ellipse cx="0" cy="-36" rx="3.5" ry="5" fill="#88bbdd" opacity="0.7"/>
+    <!-- Center line -->
+    <line x1="0" y1="-52" x2="0" y2="38" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" stroke-dasharray="4,4"/>
+  </svg>
+</div>
 
-    <div id="crosshair"></div>
-
-    <div id="compass">
-      <div id="compass-rose">
-        <div id="compass-tape">N&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;E&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SW&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NW&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;N</div>
-        <div id="compass-center"></div>
-      </div>
-    </div>
-
-    <div id="throttle-bar-container">
-      <div class="hud-label" style="font-size:9px;margin-bottom:4px;">THR</div>
-      <div id="throttle-bar"><div id="throttle-fill"></div></div>
-    </div>
-
-    <div id="minimap"><canvas id="minimap-canvas" width="140" height="140"></canvas></div>
-
-    <div id="stall-warning">STALL</div>
-
-    <div id="controls-hint">
-      W/S — Pitch<br>
-      A/D — Roll<br>
-      Q/E — Yaw<br>
-      ↑/↓ — Throttle<br>
-      F — Flaps<br>
-      G — Gear<br>
-      R — Reset
-    </div>
+<!-- HUD -->
+<div id="hud">
+  <!-- Top info bar -->
+  <div id="hud-top" class="glass">
+    <div id="hud-title">WORLD FLIGHT SIMULATOR</div>
+    <div id="hud-location">--</div>
   </div>
 
-  <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
-  </script>
-  <script type="module" src="js/main.js"></script>
+  <!-- Speed tape (left) -->
+  <div id="speed-tape" class="glass">
+    <div class="tape-label">AIRSPEED</div>
+    <div class="tape-val" id="hud-spd">0</div>
+    <div class="tape-unit">kts</div>
+    <div class="tape-sep"></div>
+    <div class="tape-sub-label">GND</div>
+    <div class="tape-sub-val" id="hud-gspd">0</div>
+  </div>
+
+  <!-- Alt tape (right) -->
+  <div id="alt-tape" class="glass">
+    <div class="tape-label">ALTITUDE</div>
+    <div class="tape-val" id="hud-alt">0</div>
+    <div class="tape-unit">m</div>
+    <div class="tape-sep"></div>
+    <div class="tape-sub-label">V/SPD</div>
+    <div class="tape-sub-val" id="hud-vs">0</div>
+  </div>
+
+  <!-- Compass -->
+  <div id="compass" class="glass">
+    <div id="compass-bar">
+      <div id="compass-tape"></div>
+      <div id="compass-ptr"></div>
+    </div>
+    <div id="compass-hdg">000° N</div>
+  </div>
+
+  <!-- Pitch ladder (SVG) -->
+  <svg id="pitch-ladder" width="200" height="160" viewBox="-100 -80 200 160"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;">
+    <!-- Horizon line -->
+    <line x1="-80" y1="0" x2="-20" y2="0" stroke="#00ff88" stroke-width="1.5" opacity="0.7"/>
+    <line x1="20" y1="0" x2="80" y2="0" stroke="#00ff88" stroke-width="1.5" opacity="0.7"/>
+    <!-- Pitch marks -->
+    <line x1="-30" y1="-20" x2="30" y2="-20" stroke="#00ff88" stroke-width="0.8" opacity="0.4"/>
+    <text x="33" y="-17" font-size="8" fill="#00ff88" opacity="0.5" font-family="Courier New">5</text>
+    <line x1="-50" y1="-40" x2="50" y2="-40" stroke="#00ff88" stroke-width="0.8" opacity="0.4"/>
+    <text x="53" y="-37" font-size="8" fill="#00ff88" opacity="0.5" font-family="Courier New">10</text>
+    <line x1="-30" y1="20" x2="30" y2="20" stroke="#00ff88" stroke-width="0.8" opacity="0.4"/>
+    <text x="33" y="23" font-size="8" fill="#00ff88" opacity="0.5" font-family="Courier New">-5</text>
+    <line x1="-50" y1="40" x2="50" y2="40" stroke="#00ff88" stroke-width="0.8" opacity="0.4"/>
+    <text x="53" y="43" font-size="8" fill="#00ff88" opacity="0.5" font-family="Courier New">-10</text>
+    <!-- Airplane reference -->
+    <line x1="-30" y1="0" x2="-10" y2="0" stroke="#ffff00" stroke-width="2"/>
+    <line x1="10" y1="0" x2="30" y2="0" stroke="#ffff00" stroke-width="2"/>
+    <circle cx="0" cy="0" r="2" fill="#ffff00"/>
+  </svg>
+
+  <!-- Warnings -->
+  <div id="stall">⚠ STALL ⚠</div>
+  <div id="gear-warn">GEAR DOWN</div>
+</div>
+
+<!-- Joystick (left thumb) -->
+<div id="joystick-zone">
+  <div id="joystick-base">
+    <div id="joystick-knob"></div>
+  </div>
+  <div id="joystick-label">PITCH / BANK</div>
+</div>
+
+<!-- Throttle (right area) -->
+<div id="throttle-zone">
+  <div id="thr-label">THR</div>
+  <div id="throttle-track">
+    <div id="throttle-fill"></div>
+    <div id="throttle-handle"></div>
+  </div>
+  <div id="thr-pct">65%</div>
+</div>
+
+<!-- Control buttons -->
+<div id="ctrl-btns">
+  <button class="ctrl-btn" id="btn-gear">GEAR↓</button>
+  <button class="ctrl-btn" id="btn-flaps">FLAPS</button>
+  <button class="ctrl-btn" id="btn-reset">RESET</button>
+</div>
+
+<script src="js/simulator.js"></script>
 </body>
 </html>
