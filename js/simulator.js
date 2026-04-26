@@ -5,14 +5,14 @@ const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4MGViMDBiN
 class FlightSimulator {
   constructor() {
     this.state = {
-      lat: 35.36,       // 富士山北側からスタート
-      lng: 138.73,
-      alt: 2000,        // 2000m高度
-      speed: 90,        // m/s
-      heading: 60,      // 東北東（東京方向）
-      pitch: 0,
+      lat: 35.42,       // 富士山西側からスタート
+      lng: 138.52,
+      alt: 2400,        // 2400m高度
+      speed: 85,        // m/s
+      heading: 110,     // 東南東（富士山に向かう）
+      pitch: -4,        // やや機首下げ（地形が見える）
       bank: 0,
-      throttle: 0.55,
+      throttle: 0.45,
       vs: 0,
       flaps: false,
       gear: true,
@@ -71,8 +71,9 @@ class FlightSimulator {
       // Visual settings
       this.viewer.scene.globe.depthTestAgainstTerrain = true;
       this.viewer.scene.globe.enableLighting          = true;
+      this.viewer.scene.verticalExaggeration           = 2.5;
       this.viewer.scene.fog.enabled                   = true;
-      this.viewer.scene.fog.density                   = 0.00007;
+      this.viewer.scene.fog.density                   = 0.00002;
       this.viewer.scene.skyAtmosphere.show            = true;
       this.viewer.scene.sun.show                      = true;
       this.viewer.scene.moon.show                     = true;
@@ -292,9 +293,9 @@ class FlightSimulator {
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
       Object.assign(this.state, {
-        lat: 35.36, lng: 138.73, alt: 2000,
-        speed: 90, heading: 60, pitch: 0, bank: 0,
-        throttle: 0.55, vs: 0, stall: false,
+        lat: 35.42, lng: 138.52, alt: 2400,
+        speed: 85, heading: 110, pitch: -4, bank: 0,
+        throttle: 0.45, vs: 0, stall: false,
       });
       g.textContent = 'GEAR↓'; g.classList.remove('on');
       f.textContent = 'FLAPS'; f.classList.remove('on');
@@ -313,9 +314,10 @@ function setupKeyboard(sim) {
     if (h['+'] || h['=']) sim.state.throttle = Math.min(1, sim.state.throttle + 0.006);
     if (h['-'] || h['_']) sim.state.throttle = Math.max(0, sim.state.throttle - 0.006);
     if (h['r']) {
-      sim.state.lat = 35.36; sim.state.lng = 138.73;
-      sim.state.alt = 2000; sim.state.speed = 90;
-      sim.state.heading = 60; delete h['r'];
+      sim.state.lat = 35.42; sim.state.lng = 138.52;
+      sim.state.alt = 2400; sim.state.speed = 85;
+      sim.state.heading = 110; sim.state.pitch = -4;
+      delete h['r'];
     }
   }, 16);
 }
