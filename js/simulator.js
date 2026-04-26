@@ -363,17 +363,90 @@ function setupKeyboard(sim) {
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 const sim = new FlightSimulator();
 
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function showApiScreen(errMsg) {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('api-screen').style.display    = 'flex';
+  const errEl   = document.getElementById('api-error');
+  const clearEl = document.getElementById('clear-key');
+  if (errMsg) {
+    errEl.innerHTML  = errMsg;
+    errEl.style.display  = 'block';
+    clearEl.style.display = 'block';
+  } else {
+    errEl.style.display  = 'none';
+    clearEl.style.display = 'none';
+  }
+}
+
+function showLoading(msg) {
+  document.getElementById('api-screen').style.display    = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+  if (msg) document.getElementById('loading-sub').textContent = msg;
+}
+
+function hideLoading() {
+  document.getElementById('loading-screen').style.display = 'none';
+}
+
+// Called when Google Maps reports auth failure (invalid key / API not enabled)
+window.gm_authfailure = () => {
+  showApiScreen(
+    '❌ <strong>APIキーエラー</strong><br>' +
+    '以下を確認してください：<br>' +
+    '① <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" ' +
+    'target="_blank" style="color:#6af">Maps JavaScript API</a> が有効になっているか<br>' +
+    '② APIキーに HTTPリファラー制限がある場合は <code>localhost</code> を許可しているか<br>' +
+    '③ Google Cloud でお支払い情報が登録されているか'
+  );
+};
+
 function loadGoogleMaps(apiKey) {
+  showLoading('Google Maps に接続しています...');
+
+  // Timeout: if callback not called within 10s, show error
+  const timeout = setTimeout(() => {
+    showApiScreen(
+      '⚠️ <strong>タイムアウト</strong><br>' +
+      'Maps APIが応答しませんでした。<br>' +
+      'ネットワーク接続とAPIキーを確認してください。'
+    );
+  }, 10000);
+
   window._gmapsCallback = () => {
-    document.getElementById('api-screen').style.display = 'none';
-    sim.initMap();
-    setupKeyboard(sim);
+    clearTimeout(timeout);
+    document.getElementById('loading-sub').textContent = '地図タイルを取得中...';
+
+    try {
+      sim.initMap();
+      setupKeyboard(sim);
+
+      // Wait for first tile to confirm the map is actually rendering
+      google.maps.event.addListenerOnce(sim.map, 'tilesloaded', () => {
+        hideLoading();
+      });
+
+      // Fallback: hide loading after 5s even if tilesloaded doesn't fire
+      setTimeout(hideLoading, 5000);
+
+    } catch (e) {
+      showApiScreen('❌ 地図の初期化に失敗しました：' + e.message);
+    }
   };
+
+  // Remove any previously loaded Maps script
+  const old = document.querySelector('script[data-gmaps]');
+  if (old) old.remove();
+
   const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=_gmapsCallback`;
+  s.dataset.gmaps = '1';
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=_gmapsCallback&v=weekly`;
   s.onerror = () => {
-    document.getElementById('api-error').style.display = 'block';
-    document.getElementById('api-screen').style.display = 'flex';
+    clearTimeout(timeout);
+    showApiScreen(
+      '❌ <strong>スクリプト読み込み失敗</strong><br>' +
+      'ネットワークエラーまたは無効なAPIキーです。'
+    );
   };
   document.head.appendChild(s);
 }
@@ -385,17 +458,27 @@ function getStoredKey() {
   } catch { return ''; }
 }
 
+// Exposed globally for the "clear key" link
+window.clearKey = () => {
+  try { localStorage.removeItem('gmaps_key'); } catch {}
+  document.getElementById('api-key-input').value = '';
+  showApiScreen(null);
+};
+
+// ── Startup ───────────────────────────────────────────────────────────────────
 const storedKey = getStoredKey();
 if (storedKey) {
   loadGoogleMaps(storedKey);
 } else {
-  document.getElementById('api-screen').style.display = 'flex';
+  showApiScreen(null);
 }
 
 document.getElementById('start-btn').addEventListener('click', () => {
   const key = document.getElementById('api-key-input').value.trim();
-  if (!key) return;
+  if (!key) {
+    showApiScreen('APIキーを入力してください。');
+    return;
+  }
   try { localStorage.setItem('gmaps_key', key); } catch {}
-  document.getElementById('api-error').style.display = 'none';
   loadGoogleMaps(key);
 });

@@ -43,7 +43,27 @@
     }
     #api-note { font-size:11px; color:rgba(255,255,255,0.35); line-height:1.7; max-width:340px; }
     #api-note a { color:#00aaff; }
-    #api-error { display:none; margin-top:12px; color:#ff5555; font-size:12px; }
+    #api-error { display:none; margin-top:12px; padding:10px 14px; background:rgba(255,60,60,0.15);
+      border:1px solid rgba(255,80,80,0.4); border-radius:8px; color:#ff7777; font-size:12px;
+      line-height:1.6; text-align:left; }
+    #clear-key { margin-top:8px; font-size:11px; color:rgba(0,170,255,0.7); cursor:pointer;
+      text-decoration:underline; display:none; }
+
+    /* ── Loading screen ── */
+    #loading-screen {
+      position:fixed; inset:0; z-index:190;
+      background:linear-gradient(160deg,#050a1a 0%,#0a0520 100%);
+      display:none; flex-direction:column; align-items:center; justify-content:center;
+      color:#fff;
+    }
+    #loading-screen .spinner {
+      width:48px; height:48px; border:3px solid rgba(0,200,255,0.2);
+      border-top-color:#00ccff; border-radius:50%;
+      animation:spin 0.8s linear infinite; margin-bottom:20px;
+    }
+    #loading-screen p { font-size:13px; color:rgba(255,255,255,0.6); letter-spacing:2px; }
+    #loading-screen .sub { font-size:11px; color:rgba(255,255,255,0.3); margin-top:8px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
     /* ── Aircraft overlay ── */
     #aircraft-wrap {
@@ -211,13 +231,21 @@
     <label>GOOGLE MAPS API KEY</label>
     <input id="api-key-input" type="text" placeholder="AIza..." autocomplete="off" autocorrect="off">
     <button id="start-btn">TAKE OFF</button>
-    <div id="api-error">APIキーが無効です。もう一度確認してください。</div>
+    <div id="api-error"></div>
+    <div id="clear-key" onclick="clearKey()">保存済みキーを削除してやり直す</div>
   </div>
   <p id="api-note">
-    <a href="https://console.cloud.google.com/google/maps-apis/" target="_blank">Google Cloud Console</a>
-    でMaps JavaScript APIを有効にしてAPIキーを取得してください。<br>
+    <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" target="_blank">
+    ① Maps JavaScript API を有効化</a> してから使用してください。<br>
     キーはブラウザに保存されます。
   </p>
+</div>
+
+<!-- Loading screen -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <p>地図を読み込み中...</p>
+  <div class="sub" id="loading-sub">Google Maps に接続しています</div>
 </div>
 
 <!-- Google Maps container -->
