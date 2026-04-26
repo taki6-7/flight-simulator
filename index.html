@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>World Flight Simulator</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#001020;
+      font-family:'Courier New', monospace; touch-action:none; user-select:none; }
+
+    #map-perspective { position:fixed; inset:0; overflow:hidden; }
+    #map-wrapper {
+      position:absolute;
+      width:250%; height:250%; top:-75%; left:-75%;
+      transform-origin:50% 50%;
+      transform:perspective(1200px) rotateX(30deg) rotateZ(0deg);
+    }
+    #map { width:100%; height:100%; }
+    .leaflet-control-attribution { font-size:8px !important; opacity:0.4; }
+
+    #aircraft-wrap {
+      position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      pointer-events:none; z-index:10;
+    }
+
+    #hud { position:fixed; inset:0; z-index:20; pointer-events:none;
+      color:#00ff88; font-family:'Courier New',monospace; }
+    .glass { background:rgba(0,0,0,0.5); border:1px solid rgba(0,255,136,0.25);
+      border-radius:8px; backdrop-filter:blur(6px); }
+
+    #hud-top { position:absolute; top:14px; left:50%; transform:translateX(-50%);
+      padding:7px 18px; text-align:center; min-width:180px; }
+    #hud-title { font-size:10px; letter-spacing:3px; color:rgba(0,255,136,0.6); }
+    #hud-location { font-size:11px; color:rgba(0,255,136,0.85); margin-top:2px; letter-spacing:1px; }
+
+    #speed-tape { position:absolute; left:12px; top:50%; transform:translateY(-50%);
+      width:62px; padding:8px 6px; text-align:center; }
+    #alt-tape   { position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      width:66px; padding:8px 6px; text-align:right; }
+    .tape-label { font-size:9px; color:rgba(0,204,102,0.7); letter-spacing:1px; }
+    .tape-val   { font-size:18px; font-weight:bold; line-height:1.1; text-shadow:0 0 8px #00ff88; }
+    .tape-unit  { font-size:9px; color:rgba(0,255,136,0.6); }
+    .tape-sep   { margin:5px 0; border-top:1px solid rgba(0,255,136,0.15); }
+    .tape-sub-label { font-size:8px; color:rgba(0,204,102,0.5); letter-spacing:1px; margin-top:4px; }
+    .tape-sub-val   { font-size:12px; color:rgba(0,255,136,0.8); }
+
+    #compass { position:absolute; bottom:164px; left:50%; transform:translateX(-50%);
+      padding:5px 14px; text-align:center; min-width:200px; }
+    #compass-bar { width:100%; height:24px; overflow:hidden; position:relative;
+      background:rgba(0,0,0,0.3); border-radius:4px; }
+    #compass-tape { position:absolute; top:0; height:100%; white-space:nowrap;
+      color:#00ff88; font-size:10px; text-shadow:0 0 6px #00ff88; }
+    #compass-tape span { position:absolute; top:50%; transform:translateY(-50%); }
+    #compass-ptr { position:absolute; left:50%; top:0; width:2px; height:100%;
+      background:#ff4444; box-shadow:0 0 6px #ff4444; transform:translateX(-50%); }
+    #compass-hdg { font-size:13px; font-weight:bold; text-align:center; margin-top:3px;
+      text-shadow:0 0 8px #00ff88; letter-spacing:2px; }
+
+    #pitch-ladder { position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%); pointer-events:none; z-index:12; }
+
+    #stall { position:absolute; top:22%; left:50%; transform:translateX(-50%);
+      color:#ff3333; font-size:20px; font-weight:bold; letter-spacing:4px;
+      text-shadow:0 0 20px #ff3333; display:none; animation:blink 0.4s infinite; }
+    #gear-warn { position:absolute; top:30%; left:50%; transform:translateX(-50%);
+      color:#ffaa00; font-size:13px; letter-spacing:2px;
+      text-shadow:0 0 12px #ffaa00; display:none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    #joystick-zone { position:fixed; bottom:16px; left:16px; z-index:30; width:144px; }
+    #joystick-base { width:144px; height:144px; border-radius:50%;
+      background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.18); position:relative; }
+    #joystick-knob { width:54px; height:54px; border-radius:50%;
+      background:rgba(0,160,255,0.45); border:2px solid rgba(0,200,255,0.7);
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      box-shadow:0 0 18px rgba(0,160,255,0.35); }
+    #joystick-label { text-align:center; color:rgba(255,255,255,0.35);
+      font-size:9px; letter-spacing:2px; margin-top:5px; }
+
+    #throttle-zone { position:fixed; bottom:16px; right:80px; z-index:30; width:44px; }
+    #thr-label { text-align:center; font-size:9px; color:rgba(0,255,136,0.5);
+      letter-spacing:1px; margin-bottom:4px; }
+    #throttle-track { width:16px; height:144px; margin:0 auto;
+      background:rgba(0,0,0,0.4); border:1px solid rgba(0,255,136,0.25);
+      border-radius:8px; position:relative; }
+    #throttle-fill { position:absolute; bottom:0; left:0; width:100%;
+      background:linear-gradient(to top,#00ff88,#00aaff); border-radius:8px; }
+    #throttle-handle { position:absolute; left:50%; transform:translateX(-50%);
+      width:32px; height:20px; border-radius:5px;
+      background:rgba(0,200,150,0.7); border:1px solid rgba(0,255,136,0.6); }
+    #thr-pct { text-align:center; font-size:11px; color:#00ff88;
+      text-shadow:0 0 6px #00ff88; margin-top:4px; }
+
+    #ctrl-btns { position:fixed; bottom:16px; right:12px; z-index:30;
+      display:flex; flex-direction:column; gap:7px; width:60px; }
+    .ctrl-btn { width:60px; height:38px; border-radius:7px;
+      border:1px solid rgba(255,255,255,0.25); background:rgba(0,0,0,0.5);
+      color:rgba(255,255,255,0.65); font-size:9px; letter-spacing:1px;
+      font-family:'Courier New',monospace; cursor:pointer;
+      backdrop-filter:blur(4px); pointer-events:auto; }
+    .ctrl-btn.on { border-color:#ffcc00; color:#ffcc00;
+      background:rgba(255,200,0,0.18); box-shadow:0 0 10px rgba(255,200,0,0.2); }
+
+    #hint { position:fixed; top:50%; right:12px; transform:translateY(-50%);
+      z-index:20; pointer-events:none; color:rgba(0,255,136,0.4);
+      font-size:9px; line-height:2; text-align:right; }
+  </style>
+</head>
+<body>
+
+<div id="map-perspective">
+  <div id="map-wrapper"><div id="map"></div></div>
+</div>
+
+<div id="aircraft-wrap">
+  <svg viewBox="-30 -55 60 110" width="68" height="126" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="0" cy="-5" rx="26" ry="42" fill="rgba(0,0,0,0.2)" transform="translate(2,3)"/>
+    <ellipse cx="0" cy="-10" rx="5.5" ry="42" fill="#e8eef8"/>
+    <ellipse cx="0" cy="-10" rx="4"   ry="40" fill="#d0daea"/>
+    <ellipse cx="0" cy="-50" rx="5.5" ry="6"  fill="#c8d4e8"/>
+    <path d="M-30,2 L30,2 L18,-8 L-18,-8 Z" fill="#c0ccd8" stroke="#b0bcc8" stroke-width="0.5"/>
+    <path d="M-30,2 L-32,-3 L-28,-4 L-28,2 Z" fill="#b0bcc8"/>
+    <path d="M30,2 L32,-3 L28,-4 L28,2 Z"    fill="#b0bcc8"/>
+    <ellipse cx="-16" cy="-2"  rx="4.5" ry="11" fill="#9aa8b8"/>
+    <ellipse cx=" 16" cy="-2"  rx="4.5" ry="11" fill="#9aa8b8"/>
+    <ellipse cx="-16" cy="-12" rx="3.5" ry="2.5" fill="#7a8898"/>
+    <ellipse cx=" 16" cy="-12" rx="3.5" ry="2.5" fill="#7a8898"/>
+    <path d="M-10,34 L10,34 L6,24 L-6,24 Z" fill="#c0ccd8"/>
+    <path d="M0,22 L0,38 L-4,36 L-4,22 Z" fill="#b0bcc8"/>
+    <path d="M0,22 L0,38 L4,36 L4,22 Z"   fill="#b0bcc8"/>
+    <ellipse cx="0" cy="-36" rx="3.5" ry="5" fill="#88bbdd" opacity="0.7"/>
+  </svg>
+</div>
+
+<div id="hud">
+  <div id="hud-top" class="glass">
+    <div id="hud-title">WORLD FLIGHT SIMULATOR</div>
+    <div id="hud-location">35.6762°N  139.6503°E</div>
+  </div>
+  <div id="speed-tape" class="glass">
+    <div class="tape-label">AIRSPEED</div>
+    <div class="tape-val" id="hud-spd">175</div>
+    <div class="tape-unit">kts</div>
+    <div class="tape-sep"></div>
+    <div class="tape-sub-label">MACH</div>
+    <div class="tape-sub-val" id="hud-mach">0.26</div>
+  </div>
+  <div id="alt-tape" class="glass">
+    <div class="tape-label">ALTITUDE</div>
+    <div class="tape-val" id="hud-alt">800</div>
+    <div class="tape-unit">m</div>
+    <div class="tape-sep"></div>
+    <div class="tape-sub-label">V/SPD</div>
+    <div class="tape-sub-val" id="hud-vs">+0</div>
+  </div>
+  <div id="compass" class="glass">
+    <div id="compass-bar">
+      <div id="compass-tape"></div>
+      <div id="compass-ptr"></div>
+    </div>
+    <div id="compass-hdg">000° N</div>
+  </div>
+  <svg id="pitch-ladder" width="200" height="160" viewBox="-100 -80 200 160"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;">
+    <line x1="-80" y1="0" x2="-20" y2="0" stroke="#00ff88" stroke-width="1.5" opacity="0.7"/>
+    <line x1="20"  y1="0" x2="80"  y2="0" stroke="#00ff88" stroke-width="1.5" opacity="0.7"/>
+    <line x1="-35" y1="-20" x2="35" y2="-20" stroke="#00ff88" stroke-width="0.8" opacity="0.45"/>
+    <text x="38" y="-17" font-size="8" fill="#00ff88" opacity="0.6" font-family="Courier New">5</text>
+    <line x1="-55" y1="-40" x2="55" y2="-40" stroke="#00ff88" stroke-width="0.8" opacity="0.45"/>
+    <text x="58" y="-37" font-size="8" fill="#00ff88" opacity="0.6" font-family="Courier New">10</text>
+    <line x1="-35" y1="20" x2="35" y2="20" stroke="#00ff88" stroke-width="0.8" opacity="0.45"/>
+    <text x="38" y="23" font-size="8" fill="#00ff88" opacity="0.6" font-family="Courier New">-5</text>
+    <line x1="-55" y1="40" x2="55" y2="40" stroke="#00ff88" stroke-width="0.8" opacity="0.45"/>
+    <text x="58" y="43" font-size="8" fill="#00ff88" opacity="0.6" font-family="Courier New">-10</text>
+    <line x1="-32" y1="0" x2="-10" y2="0" stroke="#ffff00" stroke-width="2.5"/>
+    <line x1="10"  y1="0" x2="32"  y2="0" stroke="#ffff00" stroke-width="2.5"/>
+    <circle cx="0" cy="0" r="3" fill="none" stroke="#ffff00" stroke-width="2"/>
+  </svg>
+  <div id="stall">&#9888; STALL &#9888;</div>
+  <div id="gear-warn">GEAR DOWN</div>
+</div>
+
+<div id="joystick-zone">
+  <div id="joystick-base"><div id="joystick-knob"></div></div>
+  <div id="joystick-label">PITCH / BANK</div>
+</div>
+
+<div id="throttle-zone">
+  <div id="thr-label">THR</div>
+  <div id="throttle-track">
+    <div id="throttle-fill"></div>
+    <div id="throttle-handle"></div>
+  </div>
+  <div id="thr-pct">65%</div>
+</div>
+
+<div id="ctrl-btns">
+  <button class="ctrl-btn" id="btn-gear">GEAR&#8595;</button>
+  <button class="ctrl-btn" id="btn-flaps">FLAPS</button>
+  <button class="ctrl-btn" id="btn-reset">RESET</button>
+</div>
+
+<div id="hint" class="glass" style="padding:6px 10px;">
+  W/S &#12500;&#12483;&#12481;<br>
+  A/D &#12496;&#12531;&#12463;<br>
+  +/&#8722; &#12473;&#12525;&#12483;&#12488;&#12523;<br>
+  R &#12522;&#12475;&#12483;&#12488;
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/simulator.js"></script>
+</body>
+</html>
