@@ -1,122 +1,99 @@
 'use strict';
 
-// ── Flight Simulator (Google Maps + Mobile) ──────────────────────────────────
-
 class FlightSimulator {
   constructor() {
-    // Aircraft state
     this.state = {
-      lat:      35.6762,   // Tokyo default
-      lng:      139.6503,
-      alt:      800,       // meters above sea level
-      speed:    90,        // m/s true airspeed
-      heading:  0,         // degrees (0=North)
-      pitch:    0,         // degrees, +up
-      bank:     0,         // degrees, +right
-      throttle: 0.65,
-      vs:       0,         // vertical speed m/s
-      flaps:    false,
-      gear:     true,
-      stall:    false,
+      lat: 35.6762, lng: 139.6503,
+      alt: 800, speed: 90,
+      heading: 0, pitch: 0, bank: 0,
+      throttle: 0.65, vs: 0,
+      flaps: false, gear: true, stall: false,
     };
-
-    this.input = { pitch: 0, bank: 0 }; // normalised -1..1
-    this.map   = null;
+    this.input = { pitch: 0, bank: 0 };
+    this.map = null;
     this.lastT = null;
 
     this._buildCompassTape();
     this._initJoystick();
     this._initThrottle();
     this._initButtons();
+    this._initMap();
   }
 
-  // ── Map init (called after Google Maps API loads) ─────────────────────────
-  initMap() {
-    this.map = new google.maps.Map(document.getElementById('map'), {
-      center:             { lat: this.state.lat, lng: this.state.lng },
-      zoom:               this._altToZoom(this.state.alt),
-      mapTypeId:          'satellite',
-      tilt:               45,
-      heading:            this.state.heading,
-      disableDefaultUI:   true,
-      gestureHandling:    'none',
-      keyboardShortcuts:  false,
-      backgroundColor:    '#000',
+  // ── Map (Leaflet + Esri satellite, no API key) ────────────────────────────
+  _initMap() {
+    this.map = L.map('map', {
+      center: [this.state.lat, this.state.lng],
+      zoom: 15,
+      zoomControl: false,
+      dragging: false,
+      touchZoom: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
     });
+
+    // Esri World Imagery — free satellite tiles, no API key
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '© Esri', maxZoom: 19 }
+    ).addTo(this.map);
+
+    // Place name labels overlay
+    L.tileLayer(
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { opacity: 0.7, maxZoom: 19 }
+    ).addTo(this.map);
 
     requestAnimationFrame(t => this._loop(t));
   }
 
-  // ── Main loop ─────────────────────────────────────────────────────────────
-  _loop(timestamp) {
-    if (this.lastT === null) this.lastT = timestamp;
-    const dt = Math.min((timestamp - this.lastT) / 1000, 0.05);
-    this.lastT = timestamp;
-
+  // ── Game loop ─────────────────────────────────────────────────────────────
+  _loop(ts) {
+    if (this.lastT === null) this.lastT = ts;
+    const dt = Math.min((ts - this.lastT) / 1000, 0.05);
+    this.lastT = ts;
     this._update(dt);
     this._render();
-
     requestAnimationFrame(t => this._loop(t));
   }
 
   // ── Physics ───────────────────────────────────────────────────────────────
   _update(dt) {
-    const s   = this.state;
-    const inp = this.input;
+    const s = this.state, inp = this.input;
 
-    // Bank control (roll rate ≈ 40°/s max)
-    const bankRate = 45;
-    s.bank += inp.bank * bankRate * dt;
-    s.bank  = Math.max(-50, Math.min(50, s.bank));
-    if (inp.bank === 0) s.bank *= Math.pow(0.80, dt * 60); // self-centre
+    s.bank  += inp.bank  * 45 * dt;
+    s.bank   = Math.max(-50, Math.min(50, s.bank));
+    if (inp.bank  === 0) s.bank  *= Math.pow(0.80, dt * 60);
 
-    // Pitch control (pitch rate ≈ 20°/s max)
-    const pitchRate = 22;
-    s.pitch += inp.pitch * pitchRate * dt;
+    s.pitch += inp.pitch * 22 * dt;
     s.pitch  = Math.max(-30, Math.min(35, s.pitch));
     if (inp.pitch === 0) s.pitch *= Math.pow(0.88, dt * 60);
 
-    // Coordinated turn: bank → heading rate
-    // At bank 45° and 90 kts cruise ≈ 3°/s standard rate
+    // Coordinated turn
     const bankRad = s.bank * Math.PI / 180;
-    const turnRate = (s.speed / 9.81) * Math.tan(bankRad) * (180 / Math.PI);
-    s.heading = (s.heading + turnRate * dt + 360) % 360;
+    s.heading = (s.heading + (s.speed / 9.81) * Math.tan(bankRad) * (180 / Math.PI) * dt + 360) % 360;
 
-    // Throttle → target speed (40 – 260 m/s, ~78 – 505 kts)
-    const targetSpeed = s.throttle * 220 + 40;
-    s.speed += (targetSpeed - s.speed) * Math.min(dt * 0.35, 1);
+    // Speed from throttle
+    s.speed += (s.throttle * 220 + 40 - s.speed) * Math.min(dt * 0.35, 1);
 
-    // Lift reduction in steep bank
-    const liftFactor = Math.cos(bankRad);
+    // Vertical speed & altitude
+    s.vs  = Math.sin(s.pitch * Math.PI / 180) * s.speed * Math.cos(bankRad);
+    s.alt = Math.max(30, Math.min(12000, s.alt + s.vs * dt));
 
-    // Vertical speed from pitch + gravity compensation
-    s.vs = Math.sin(s.pitch * Math.PI / 180) * s.speed * liftFactor;
+    // Stall
+    s.stall = s.speed < 60 && s.alt > 60;
+    if (s.stall) s.pitch -= 8 * dt;
 
-    // Altitude
-    s.alt += s.vs * dt;
-    s.alt  = Math.max(30, Math.min(12000, s.alt));
-
-    // Stall: below ~60 m/s (~117 kts) while airborne
-    s.stall = (s.speed < 60 && s.alt > 60);
-
-    // Stall effect: nose drops, speed builds
-    if (s.stall) {
-      s.pitch -= 8 * dt;
-    }
-
-    // Move position (great-circle approximation)
-    const headRad = s.heading * Math.PI / 180;
-    const latRad  = s.lat    * Math.PI / 180;
-    const R       = 6371000;
-    const dist    = s.speed * dt;
-
-    s.lat += (dist * Math.cos(headRad) / R) * (180 / Math.PI);
-    s.lng += (dist * Math.sin(headRad) / (R * Math.cos(latRad))) * (180 / Math.PI);
-
-    // Wrap longitude
+    // Move lat/lng
+    const hRad = s.heading * Math.PI / 180;
+    const lRad = s.lat * Math.PI / 180;
+    const d    = s.speed * dt;
+    s.lat += (d * Math.cos(hRad) / 6371000) * (180 / Math.PI);
+    s.lng += (d * Math.sin(hRad) / (6371000 * Math.cos(lRad))) * (180 / Math.PI);
     if (s.lng >  180) s.lng -= 360;
     if (s.lng < -180) s.lng += 360;
-    // Clamp latitude
     s.lat = Math.max(-85, Math.min(85, s.lat));
   }
 
@@ -124,361 +101,179 @@ class FlightSimulator {
   _render() {
     const s = this.state;
 
-    // Update Google Map
-    if (this.map) {
-      this.map.setCenter({ lat: s.lat, lng: s.lng });
-      this.map.setHeading(s.heading);
-      this.map.setZoom(this._altToZoom(s.alt));
-      // Tilt: reduce at extreme altitude
-      const tilt = s.alt < 8000 ? 45 : 30;
-      this.map.setTilt(tilt);
-    }
+    // Map center + perspective rotation
+    this.map.setView([s.lat, s.lng], this._altToZoom(s.alt), { animate: false });
+    document.getElementById('map-wrapper').style.transform =
+      `perspective(1200px) rotateX(30deg) rotateZ(${-s.heading}deg)`;
 
-    // Aircraft bank visual
-    const wrap = document.getElementById('aircraft-wrap');
-    wrap.style.transform = `translate(-50%,-50%) rotate(${s.bank.toFixed(1)}deg)`;
+    // Aircraft bank
+    document.getElementById('aircraft-wrap').style.transform =
+      `translate(-50%,-50%) rotate(${s.bank.toFixed(1)}deg)`;
 
-    // Pitch ladder shift (4px per degree)
-    const ladder = document.getElementById('pitch-ladder');
-    ladder.style.transform =
+    // Pitch ladder
+    document.getElementById('pitch-ladder').style.transform =
       `translate(-50%,-50%) rotate(${(-s.bank).toFixed(1)}deg) translateY(${(s.pitch * 3.5).toFixed(1)}px)`;
 
-    // Speed
-    const kts = (s.speed * 1.944).toFixed(0);
-    document.getElementById('hud-spd').textContent  = kts;
-    document.getElementById('hud-gspd').textContent = kts; // ground speed ≈ TAS (simplified)
+    // HUD numbers
+    document.getElementById('hud-spd').textContent  = (s.speed * 1.944).toFixed(0);
+    document.getElementById('hud-mach').textContent = (s.speed / 340).toFixed(2);
+    document.getElementById('hud-alt').textContent  = Math.round(s.alt);
+    document.getElementById('hud-vs').textContent   = (s.vs >= 0 ? '+' : '') + s.vs.toFixed(0);
 
-    // Altitude & VS
-    document.getElementById('hud-alt').textContent = Math.round(s.alt);
-    document.getElementById('hud-vs').textContent  = (s.vs >= 0 ? '+' : '') + s.vs.toFixed(0);
+    this._updateCompass(Math.round(s.heading));
 
-    // Compass
-    const hdg = Math.round(s.heading);
-    this._updateCompass(hdg);
+    const la = Math.abs(s.lat).toFixed(4) + (s.lat >= 0 ? '°N' : '°S');
+    const lo = Math.abs(s.lng).toFixed(4) + (s.lng >= 0 ? '°E' : '°W');
+    document.getElementById('hud-location').textContent = `${la}  ${lo}`;
 
-    // Location
-    const latStr = Math.abs(s.lat).toFixed(3) + (s.lat >= 0 ? '°N' : '°S');
-    const lngStr = Math.abs(s.lng).toFixed(3) + (s.lng >= 0 ? '°E' : '°W');
-    document.getElementById('hud-location').textContent = `${latStr}  ${lngStr}`;
+    document.getElementById('stall').style.display    = s.stall ? 'block' : 'none';
+    document.getElementById('gear-warn').style.display =
+      (!s.gear && s.alt < 500 && s.speed < 100) ? 'block' : 'none';
 
-    // Stall warning
-    document.getElementById('stall').style.display = s.stall ? 'block' : 'none';
-
-    // Gear warning (on approach: below 500 m, gear retracted, speed < 100 m/s)
-    const gearWarn = !s.gear && s.alt < 500 && s.speed < 100;
-    const gw = document.getElementById('gear-warn');
-    gw.style.display = gearWarn ? 'block' : 'none';
-
-    // Throttle bar
     document.getElementById('throttle-fill').style.height   = `${s.throttle * 100}%`;
     document.getElementById('throttle-handle').style.bottom = `${s.throttle * 120}px`;
     document.getElementById('thr-pct').textContent = `${Math.round(s.throttle * 100)}%`;
   }
 
-  // ── Compass tape ──────────────────────────────────────────────────────────
+  // ── Compass ───────────────────────────────────────────────────────────────
   _buildCompassTape() {
     const marks = [
-      [0,'N'],[30,'30'],[45,'NE'],[60,'60'],[90,'E'],
-      [120,'120'],[135,'SE'],[150,'150'],[180,'S'],
-      [210,'210'],[225,'SW'],[240,'240'],[270,'W'],
-      [300,'300'],[315,'NW'],[330,'330'],[360,'N'],
+      [0,'N'],[45,'NE'],[90,'E'],[135,'SE'],
+      [180,'S'],[225,'SW'],[270,'W'],[315,'NW'],[360,'N'],
     ];
-    // Build a wide tape: 3px per degree
-    this._compassPxPerDeg = 2.5;
+    this._pxDeg = 2.5;
     const tape = document.getElementById('compass-tape');
-    tape.innerHTML = '';
-    tape.style.width = `${360 * this._compassPxPerDeg * 2}px`; // double for looping
-    for (let rep = 0; rep < 2; rep++) {
-      for (const [deg, label] of marks) {
-        const span = document.createElement('span');
-        span.textContent = label;
-        span.style.position = 'absolute';
-        span.style.left = `${(deg + rep * 360) * this._compassPxPerDeg}px`;
-        span.style.top = '50%';
-        span.style.transform = 'translateY(-50%)';
-        tape.appendChild(span);
+    tape.style.width = `${360 * this._pxDeg * 2}px`;
+    for (let r = 0; r < 2; r++) {
+      for (const [deg, lbl] of marks) {
+        const sp = document.createElement('span');
+        sp.textContent = lbl;
+        sp.style.left  = `${(deg + r * 360) * this._pxDeg}px`;
+        tape.appendChild(sp);
       }
     }
   }
 
   _updateCompass(hdg) {
-    const containerW = 200;
-    const pxPerDeg   = this._compassPxPerDeg;
-    const shift      = containerW / 2 - hdg * pxPerDeg;
-    document.getElementById('compass-tape').style.transform = `translateX(${shift}px)`;
-
-    const cardinals = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
-                       'S','SSW','SW','WSW','W','WNW','NW','NNW'];
-    const card = cardinals[Math.round(hdg / 22.5) % 16];
+    document.getElementById('compass-tape').style.transform =
+      `translateX(${100 - hdg * this._pxDeg}px)`;
+    const cards = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
+                   'S','SSW','SW','WSW','W','WNW','NW','NNW'];
     document.getElementById('compass-hdg').textContent =
-      `${String(hdg).padStart(3,'0')}° ${card}`;
+      `${String(hdg).padStart(3,'0')}° ${cards[Math.round(hdg / 22.5) % 16]}`;
   }
 
-  // ── Altitude → zoom ───────────────────────────────────────────────────────
   _altToZoom(alt) {
-    if (alt <  200) return 17;
-    if (alt <  400) return 16;
-    if (alt <  800) return 15;
-    if (alt < 1500) return 14;
-    if (alt < 3000) return 13;
-    if (alt < 6000) return 12;
-    if (alt < 9000) return 11;
-    return 10;
+    if (alt <  300) return 17;
+    if (alt <  600) return 16;
+    if (alt < 1200) return 15;
+    if (alt < 2500) return 14;
+    if (alt < 5000) return 13;
+    if (alt < 8000) return 12;
+    return 11;
   }
 
   // ── Joystick ──────────────────────────────────────────────────────────────
   _initJoystick() {
-    const base  = document.getElementById('joystick-base');
-    const knob  = document.getElementById('joystick-knob');
-    const maxR  = 45;
-    let activeId = null;
-    let cx = 0, cy = 0;
+    const base = document.getElementById('joystick-base');
+    const knob = document.getElementById('joystick-knob');
+    const maxR = 45;
+    let aid = null, cx = 0, cy = 0;
 
-    const onStart = (e) => {
+    const start = (e) => {
       e.preventDefault();
-      const pt = e.touches ? e.touches[0] : e;
-      const r  = base.getBoundingClientRect();
-      cx = r.left + r.width  / 2;
-      cy = r.top  + r.height / 2;
-      activeId = e.touches ? e.touches[0].identifier : 'mouse';
+      const t = e.touches ? e.touches[0] : e;
+      const r = base.getBoundingClientRect();
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+      aid = e.touches ? t.identifier : 'mouse';
     };
-
-    const onMove = (e) => {
+    const move = (e) => {
       e.preventDefault();
-      if (activeId === null) return;
-      let pt;
-      if (e.touches) {
-        for (const t of e.touches) {
-          if (t.identifier === activeId) { pt = t; break; }
-        }
-        if (!pt) return;
-      } else { pt = e; }
-
-      const dx   = pt.clientX - cx;
-      const dy   = pt.clientY - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const clamp = Math.min(dist, maxR);
-      const angle = Math.atan2(dy, dx);
-      const ox = Math.cos(angle) * clamp;
-      const oy = Math.sin(angle) * clamp;
-
+      if (aid === null) return;
+      let t = e.touches ? [...e.touches].find(x => x.identifier === aid) : e;
+      if (!t) return;
+      const dx = t.clientX - cx, dy = t.clientY - cy;
+      const d = Math.min(Math.sqrt(dx*dx+dy*dy), maxR);
+      const a = Math.atan2(dy, dx);
+      const ox = Math.cos(a)*d, oy = Math.sin(a)*d;
       knob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
-      this.input.bank  =  ox / maxR;  // right = positive bank
-      this.input.pitch = -oy / maxR;  // up    = positive pitch (pull back = nose up)
+      this.input.bank  =  ox / maxR;
+      this.input.pitch = -oy / maxR;
     };
-
-    const onEnd = (e) => {
-      e.preventDefault();
-      activeId = null;
+    const end = (e) => {
+      e.preventDefault(); aid = null;
       knob.style.transform = 'translate(-50%,-50%)';
-      this.input.bank  = 0;
-      this.input.pitch = 0;
+      this.input.bank = this.input.pitch = 0;
     };
 
-    base.addEventListener('touchstart',  onStart, { passive: false });
-    base.addEventListener('touchmove',   onMove,  { passive: false });
-    base.addEventListener('touchend',    onEnd,   { passive: false });
-    base.addEventListener('touchcancel', onEnd,   { passive: false });
-    base.addEventListener('mousedown',   onStart);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup',   onEnd);
+    base.addEventListener('touchstart',  start, { passive:false });
+    base.addEventListener('touchmove',   move,  { passive:false });
+    base.addEventListener('touchend',    end,   { passive:false });
+    base.addEventListener('touchcancel', end,   { passive:false });
+    base.addEventListener('mousedown',   start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup',   end);
   }
 
-  // ── Throttle slider ───────────────────────────────────────────────────────
+  // ── Throttle ──────────────────────────────────────────────────────────────
   _initThrottle() {
-    const track  = document.getElementById('throttle-track');
-    const handle = document.getElementById('throttle-handle');
-    let dragging = false;
-
-    const setFromY = (clientY) => {
-      const r   = track.getBoundingClientRect();
-      const pct = 1 - Math.max(0, Math.min(1, (clientY - r.top) / r.height));
-      this.state.throttle = pct;
+    const track = document.getElementById('throttle-track');
+    let drag = false;
+    const set = (y) => {
+      const r = track.getBoundingClientRect();
+      this.state.throttle = 1 - Math.max(0, Math.min(1, (y - r.top) / r.height));
     };
-
-    const onStart = (e) => { e.preventDefault(); dragging = true; setFromY(e.touches ? e.touches[0].clientY : e.clientY); };
-    const onMove  = (e) => { if (!dragging) return; e.preventDefault(); setFromY(e.touches ? e.touches[0].clientY : e.clientY); };
-    const onEnd   = ()  => { dragging = false; };
-
-    track.addEventListener('touchstart',  onStart, { passive: false });
-    track.addEventListener('touchmove',   onMove,  { passive: false });
-    track.addEventListener('touchend',    onEnd,   { passive: false });
-    track.addEventListener('mousedown',   onStart);
-    window.addEventListener('mousemove',  onMove);
-    window.addEventListener('mouseup',    onEnd);
+    const start = (e) => { e.preventDefault(); drag = true; set(e.touches ? e.touches[0].clientY : e.clientY); };
+    const move  = (e) => { if (!drag) return; e.preventDefault(); set(e.touches ? e.touches[0].clientY : e.clientY); };
+    const end   = ()  => { drag = false; };
+    track.addEventListener('touchstart',  start, { passive:false });
+    track.addEventListener('touchmove',   move,  { passive:false });
+    track.addEventListener('touchend',    end,   { passive:false });
+    track.addEventListener('mousedown',   start);
+    window.addEventListener('mousemove',  move);
+    window.addEventListener('mouseup',    end);
   }
 
   // ── Buttons ───────────────────────────────────────────────────────────────
   _initButtons() {
-    const gearBtn  = document.getElementById('btn-gear');
-    const flapsBtn = document.getElementById('btn-flaps');
-    const resetBtn = document.getElementById('btn-reset');
+    const g = document.getElementById('btn-gear');
+    const f = document.getElementById('btn-flaps');
 
-    gearBtn.addEventListener('click', () => {
+    g.addEventListener('click', () => {
       this.state.gear = !this.state.gear;
-      gearBtn.textContent = this.state.gear ? 'GEAR↓' : 'GEAR↑';
-      gearBtn.classList.toggle('on', !this.state.gear);
+      g.textContent = this.state.gear ? 'GEAR↓' : 'GEAR↑';
+      g.classList.toggle('on', !this.state.gear);
     });
-
-    flapsBtn.addEventListener('click', () => {
+    f.addEventListener('click', () => {
       this.state.flaps = !this.state.flaps;
-      flapsBtn.textContent = this.state.flaps ? 'FLAP 1' : 'FLAPS';
-      flapsBtn.classList.toggle('on', this.state.flaps);
-      // Flaps: extra drag + slow down target speed
+      f.textContent = this.state.flaps ? 'FLAP 1' : 'FLAPS';
+      f.classList.toggle('on', this.state.flaps);
     });
-
-    resetBtn.addEventListener('click', () => {
+    document.getElementById('btn-reset').addEventListener('click', () => {
       Object.assign(this.state, {
-        lat: 35.6762, lng: 139.6503, alt: 800,
-        speed: 90, heading: 0, pitch: 0, bank: 0,
-        throttle: 0.65, vs: 0, stall: false,
+        lat:35.6762, lng:139.6503, alt:800, speed:90,
+        heading:0, pitch:0, bank:0, throttle:0.65, vs:0, stall:false,
       });
-      gearBtn.textContent = 'GEAR↓';
-      gearBtn.classList.remove('on');
-      flapsBtn.textContent = 'FLAPS';
-      flapsBtn.classList.remove('on');
+      g.textContent='GEAR↓'; g.classList.remove('on');
+      f.textContent='FLAPS'; f.classList.remove('on');
     });
   }
 }
 
-// ── Keyboard controls (desktop) ──────────────────────────────────────────────
+// ── Keyboard (desktop) ────────────────────────────────────────────────────────
 function setupKeyboard(sim) {
-  const held = {};
-  window.addEventListener('keydown', e => { held[e.key] = true; });
-  window.addEventListener('keyup',   e => { held[e.key] = false; });
-
+  const h = {};
+  window.addEventListener('keydown', e => { h[e.key] = true; });
+  window.addEventListener('keyup',   e => { h[e.key] = false; });
   setInterval(() => {
-    if (!sim) return;
-    sim.input.pitch = (held['s'] || held['ArrowDown'] ? 1 : 0) - (held['w'] || held['ArrowUp']   ? 1 : 0);
-    sim.input.bank  = (held['d'] || held['ArrowRight']? 1 : 0) - (held['a'] || held['ArrowLeft'] ? 1 : 0);
-    if (held['='] || held['+']) sim.state.throttle = Math.min(1,   sim.state.throttle + 0.005);
-    if (held['-'] || held['_']) sim.state.throttle = Math.max(0,   sim.state.throttle - 0.005);
-    if (held['g']) { sim.state.gear = !sim.state.gear; delete held['g']; }
-    if (held['f']) { sim.state.flaps = !sim.state.flaps; delete held['f']; }
-    if (held['r']) { sim.state.lat = 35.6762; sim.state.lng = 139.6503; sim.state.alt = 800;
-                     sim.state.speed = 90; sim.state.heading = 0; delete held['r']; }
+    sim.input.pitch = (h['s']||h['ArrowDown'] ?1:0) - (h['w']||h['ArrowUp']   ?1:0);
+    sim.input.bank  = (h['d']||h['ArrowRight']?1:0) - (h['a']||h['ArrowLeft'] ?1:0);
+    if (h['='||'+']) sim.state.throttle = Math.min(1, sim.state.throttle+0.005);
+    if (h['-'||'_']) sim.state.throttle = Math.max(0, sim.state.throttle-0.005);
+    if (h['r']) { sim.state.lat=35.6762; sim.state.lng=139.6503; sim.state.alt=800;
+                  sim.state.speed=90; sim.state.heading=0; delete h['r']; }
   }, 16);
 }
 
-// ── Bootstrap ────────────────────────────────────────────────────────────────
 const sim = new FlightSimulator();
-
-// ── UI helpers ───────────────────────────────────────────────────────────────
-function showApiScreen(errMsg) {
-  document.getElementById('loading-screen').style.display = 'none';
-  document.getElementById('api-screen').style.display    = 'flex';
-  const errEl   = document.getElementById('api-error');
-  const clearEl = document.getElementById('clear-key');
-  if (errMsg) {
-    errEl.innerHTML  = errMsg;
-    errEl.style.display  = 'block';
-    clearEl.style.display = 'block';
-  } else {
-    errEl.style.display  = 'none';
-    clearEl.style.display = 'none';
-  }
-}
-
-function showLoading(msg) {
-  document.getElementById('api-screen').style.display    = 'none';
-  document.getElementById('loading-screen').style.display = 'flex';
-  if (msg) document.getElementById('loading-sub').textContent = msg;
-}
-
-function hideLoading() {
-  document.getElementById('loading-screen').style.display = 'none';
-}
-
-// Called when Google Maps reports auth failure (invalid key / API not enabled)
-window.gm_authfailure = () => {
-  showApiScreen(
-    '❌ <strong>APIキーエラー</strong><br>' +
-    '以下を確認してください：<br>' +
-    '① <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" ' +
-    'target="_blank" style="color:#6af">Maps JavaScript API</a> が有効になっているか<br>' +
-    '② APIキーに HTTPリファラー制限がある場合は <code>localhost</code> を許可しているか<br>' +
-    '③ Google Cloud でお支払い情報が登録されているか'
-  );
-};
-
-function loadGoogleMaps(apiKey) {
-  showLoading('Google Maps に接続しています...');
-
-  // Timeout: if callback not called within 10s, show error
-  const timeout = setTimeout(() => {
-    showApiScreen(
-      '⚠️ <strong>タイムアウト</strong><br>' +
-      'Maps APIが応答しませんでした。<br>' +
-      'ネットワーク接続とAPIキーを確認してください。'
-    );
-  }, 10000);
-
-  window._gmapsCallback = () => {
-    clearTimeout(timeout);
-    document.getElementById('loading-sub').textContent = '地図タイルを取得中...';
-
-    try {
-      sim.initMap();
-      setupKeyboard(sim);
-
-      // Wait for first tile to confirm the map is actually rendering
-      google.maps.event.addListenerOnce(sim.map, 'tilesloaded', () => {
-        hideLoading();
-      });
-
-      // Fallback: hide loading after 5s even if tilesloaded doesn't fire
-      setTimeout(hideLoading, 5000);
-
-    } catch (e) {
-      showApiScreen('❌ 地図の初期化に失敗しました：' + e.message);
-    }
-  };
-
-  // Remove any previously loaded Maps script
-  const old = document.querySelector('script[data-gmaps]');
-  if (old) old.remove();
-
-  const s = document.createElement('script');
-  s.dataset.gmaps = '1';
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=_gmapsCallback&v=weekly`;
-  s.onerror = () => {
-    clearTimeout(timeout);
-    showApiScreen(
-      '❌ <strong>スクリプト読み込み失敗</strong><br>' +
-      'ネットワークエラーまたは無効なAPIキーです。'
-    );
-  };
-  document.head.appendChild(s);
-}
-
-function getStoredKey() {
-  try {
-    const p = new URLSearchParams(location.search);
-    return p.get('key') || localStorage.getItem('gmaps_key') || '';
-  } catch { return ''; }
-}
-
-// Exposed globally for the "clear key" link
-window.clearKey = () => {
-  try { localStorage.removeItem('gmaps_key'); } catch {}
-  document.getElementById('api-key-input').value = '';
-  showApiScreen(null);
-};
-
-// ── Startup ───────────────────────────────────────────────────────────────────
-const storedKey = getStoredKey();
-if (storedKey) {
-  loadGoogleMaps(storedKey);
-} else {
-  showApiScreen(null);
-}
-
-document.getElementById('start-btn').addEventListener('click', () => {
-  const key = document.getElementById('api-key-input').value.trim();
-  if (!key) {
-    showApiScreen('APIキーを入力してください。');
-    return;
-  }
-  try { localStorage.setItem('gmaps_key', key); } catch {}
-  loadGoogleMaps(key);
-});
+setupKeyboard(sim);
