@@ -2,6 +2,17 @@
 
 const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4MGViMDBiNC0wMzM4LTQ3OGEtOTgzOC05NzVjNWJmYjNkNmEiLCJpZCI6NDIzNjgxLCJpYXQiOjE3NzcxODU4NTl9.IrAO4qaQUBLFli4ennYEX79ONLZVhKDAXUS2w6MhrHg';
 
+const LOCATIONS = [
+  { name: '富士山',           sub: 'MT. FUJI, JAPAN',        lat:35.60, lng:138.78, alt:1200, heading:185 },
+  { name: '東京湾',           sub: 'TOKYO BAY, JAPAN',        lat:35.65, lng:139.85, alt:700,  heading:220 },
+  { name: '立山連峰',         sub: 'TATEYAMA, JAPAN',         lat:36.55, lng:137.52, alt:3000, heading:110 },
+  { name: 'ハワイ',           sub: 'HAWAII, USA',             lat:19.82, lng:-155.47,alt:1500, heading:300 },
+  { name: 'グランドキャニオン', sub: 'GRAND CANYON, USA',      lat:36.10, lng:-112.10,alt:2200, heading:175 },
+  { name: 'ヒマラヤ',         sub: 'HIMALAYAS',               lat:27.99, lng:86.93,  alt:4500, heading:90  },
+  { name: 'アルプス',         sub: 'ALPS, EUROPE',            lat:45.98, lng:7.65,   alt:2500, heading:200 },
+  { name: 'パタゴニア',       sub: 'PATAGONIA',               lat:-50.96,lng:-73.15, alt:1500, heading:0   },
+];
+
 class FlightSimulator {
   constructor() {
     this.state = {
@@ -18,7 +29,7 @@ class FlightSimulator {
       gear: true,
       stall: false,
     };
-    this.input   = { pitch: 0, bank: 0 };
+    this.input   = { pitch: 0, bank: 0, altAdj: 0 };
     this.viewer  = null;
     this.lastT   = null;
 
@@ -26,6 +37,8 @@ class FlightSimulator {
     this._initJoystick();
     this._initThrottle();
     this._initButtons();
+    this._initAltButtons();
+    this._initLocModal();
     this._initCesium();
   }
 
@@ -131,6 +144,11 @@ class FlightSimulator {
     // Vertical speed & altitude
     s.vs  = Math.sin(s.pitch * Math.PI / 180) * s.speed * Math.cos(bankRad);
     s.alt = Math.max(50, Math.min(13000, s.alt + s.vs * dt));
+
+    // Direct altitude adjustment (Q/E keys or alt buttons)
+    if (this.input.altAdj !== 0) {
+      s.alt = Math.max(50, Math.min(13000, s.alt + this.input.altAdj * 120 * dt));
+    }
 
     // Terrain proximity warning (below 300m and descending)
     const terrainWarn = s.alt < 300 && s.vs < -5;
@@ -276,6 +294,54 @@ class FlightSimulator {
     window.addEventListener('mouseup',    end);
   }
 
+  // ── Altitude Buttons ──────────────────────────────────────────────────────
+  _initAltButtons() {
+    const up = document.getElementById('btn-alt-up');
+    const dn = document.getElementById('btn-alt-dn');
+    const set = (v) => { this.input.altAdj = v; };
+    const stop = () => { this.input.altAdj = 0; };
+    for (const [btn, val] of [[up, 1], [dn, -1]]) {
+      btn.addEventListener('touchstart',  (e) => { e.preventDefault(); set(val); }, { passive: false });
+      btn.addEventListener('touchend',    (e) => { e.preventDefault(); stop(); },   { passive: false });
+      btn.addEventListener('touchcancel', (e) => { e.preventDefault(); stop(); },   { passive: false });
+      btn.addEventListener('mousedown',   () => set(val));
+      btn.addEventListener('mouseup',     stop);
+      btn.addEventListener('mouseleave',  stop);
+    }
+  }
+
+  // ── Location Modal ────────────────────────────────────────────────────────
+  _initLocModal() {
+    const modal = document.getElementById('loc-modal');
+
+    // Build location buttons
+    for (const loc of LOCATIONS) {
+      const btn = document.createElement('button');
+      btn.className = 'loc-btn';
+      btn.innerHTML = `${loc.name}<span class="loc-sub">${loc.sub}</span>`;
+      btn.addEventListener('click', () => {
+        this._teleport(loc);
+        modal.classList.remove('show');
+      });
+      modal.appendChild(btn);
+    }
+
+    // Cancel button
+    const cancel = document.createElement('button');
+    cancel.id = 'loc-cancel';
+    cancel.textContent = '[ CANCEL ]';
+    cancel.addEventListener('click', () => modal.classList.remove('show'));
+    modal.appendChild(cancel);
+  }
+
+  _teleport(loc) {
+    Object.assign(this.state, {
+      lat: loc.lat, lng: loc.lng, alt: loc.alt,
+      heading: loc.heading, pitch: 0, bank: 0,
+      speed: 70, throttle: 0.38, vs: 0, stall: false,
+    });
+  }
+
   // ── Buttons ───────────────────────────────────────────────────────────────
   _initButtons() {
     const g = document.getElementById('btn-gear');
@@ -292,13 +358,13 @@ class FlightSimulator {
       f.classList.toggle('on', this.state.flaps);
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
-      Object.assign(this.state, {
-        lat: 35.42, lng: 138.52, alt: 2400,
-        speed: 85, heading: 110, pitch: -4, bank: 0,
-        throttle: 0.45, vs: 0, stall: false,
-      });
+      this._teleport(LOCATIONS[0]);
       g.textContent = 'GEAR↓'; g.classList.remove('on');
       f.textContent = 'FLAPS'; f.classList.remove('on');
+    });
+
+    document.getElementById('btn-loc').addEventListener('click', () => {
+      document.getElementById('loc-modal').classList.add('show');
     });
   }
 }
@@ -309,16 +375,12 @@ function setupKeyboard(sim) {
   window.addEventListener('keydown', e => { h[e.key] = true; });
   window.addEventListener('keyup',   e => { h[e.key] = false; });
   setInterval(() => {
-    sim.input.pitch = (h['s'] || h['ArrowDown']  ? 1 : 0) - (h['w'] || h['ArrowUp']    ? 1 : 0);
-    sim.input.bank  = (h['d'] || h['ArrowRight'] ? 1 : 0) - (h['a'] || h['ArrowLeft']  ? 1 : 0);
+    sim.input.pitch  = (h['s'] || h['ArrowDown']  ? 1 : 0) - (h['w'] || h['ArrowUp']    ? 1 : 0);
+    sim.input.bank   = (h['d'] || h['ArrowRight'] ? 1 : 0) - (h['a'] || h['ArrowLeft']  ? 1 : 0);
+    sim.input.altAdj = (h['q'] ? 1 : 0) - (h['e'] ? 1 : 0);
     if (h['+'] || h['=']) sim.state.throttle = Math.min(1, sim.state.throttle + 0.006);
     if (h['-'] || h['_']) sim.state.throttle = Math.max(0, sim.state.throttle - 0.006);
-    if (h['r']) {
-      sim.state.lat = 35.42; sim.state.lng = 138.52;
-      sim.state.alt = 2400; sim.state.speed = 85;
-      sim.state.heading = 110; sim.state.pitch = -4;
-      delete h['r'];
-    }
+    if (h['r']) { sim._teleport(LOCATIONS[0]); delete h['r']; }
   }, 16);
 }
 
