@@ -12,14 +12,11 @@
     html, body { width:100%; height:100%; overflow:hidden; background:#000;
       font-family:'Courier New', monospace; touch-action:none; user-select:none; }
 
-    /* Cesium container */
     #cesiumContainer { position:fixed; inset:0; }
 
-    /* Hide Cesium default UI */
     .cesium-widget-credits,
     .cesium-viewer-bottom { display:none !important; }
 
-    /* ── Cockpit frame overlay ── */
     #cockpit {
       position:fixed; inset:0; z-index:8; pointer-events:none;
       background:radial-gradient(ellipse at 50% 38%, transparent 52%, rgba(0,0,0,0.65) 100%);
@@ -29,7 +26,6 @@
       background:linear-gradient(to top, #111 0%, rgba(20,20,20,0.85) 60%, transparent 100%);
     }
 
-    /* ── HUD ── */
     #hud { position:fixed; inset:0; z-index:20; pointer-events:none;
       color:#00ff88; font-family:'Courier New',monospace; }
     .glass { background:rgba(0,0,0,0.5); border:1px solid rgba(0,255,136,0.22);
@@ -40,10 +36,8 @@
     #hud-title { font-size:10px; letter-spacing:3px; color:rgba(0,255,136,0.55); }
     #hud-location { font-size:11px; color:rgba(0,255,136,0.85); margin-top:2px; letter-spacing:1px; }
 
-    /* Speed tape */
     #speed-tape { position:absolute; left:12px; top:50%; transform:translateY(-50%);
       width:64px; padding:8px 6px; text-align:center; }
-    /* Alt tape */
     #alt-tape { position:absolute; right:12px; top:50%; transform:translateY(-50%);
       width:68px; padding:8px 6px; text-align:right; }
     .tape-label { font-size:9px; color:rgba(0,204,102,0.7); letter-spacing:1px; }
@@ -53,7 +47,6 @@
     .tape-sub-label { font-size:8px; color:rgba(0,204,102,0.5); letter-spacing:1px; margin-top:4px; }
     .tape-sub-val   { font-size:12px; color:rgba(0,255,136,0.8); }
 
-    /* Compass */
     #compass { position:absolute; bottom:170px; left:50%; transform:translateX(-50%);
       padding:5px 14px; text-align:center; min-width:210px; }
     #compass-bar { width:100%; height:24px; overflow:hidden; position:relative;
@@ -66,11 +59,9 @@
     #compass-hdg { font-size:14px; font-weight:bold; text-align:center; margin-top:3px;
       text-shadow:0 0 8px #00ff88; letter-spacing:2px; }
 
-    /* Pitch ladder */
     #pitch-ladder { position:absolute; top:50%; left:50%;
       transform:translate(-50%,-50%); pointer-events:none; z-index:12; }
 
-    /* Warnings */
     #stall { position:absolute; top:20%; left:50%; transform:translateX(-50%);
       color:#ff3333; font-size:22px; font-weight:bold; letter-spacing:5px;
       text-shadow:0 0 24px #ff3333; display:none; animation:blink 0.4s infinite; }
@@ -79,7 +70,6 @@
       text-shadow:0 0 14px #ff8800; display:none; animation:blink 0.5s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 
-    /* Loading overlay */
     #loading {
       position:fixed; inset:0; z-index:100;
       background:linear-gradient(160deg,#050a1a,#0a0520);
@@ -93,7 +83,6 @@
     #loading-msg { margin-top:16px; font-size:12px; color:rgba(255,255,255,0.45); letter-spacing:1px; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ── Joystick ── */
     #joystick-zone { position:fixed; bottom:16px; left:16px; z-index:30; width:144px; }
     #joystick-base { width:144px; height:144px; border-radius:50%;
       background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.16); position:relative; }
@@ -104,7 +93,6 @@
     #joystick-label { text-align:center; color:rgba(255,255,255,0.3);
       font-size:9px; letter-spacing:2px; margin-top:5px; }
 
-    /* ── Throttle ── */
     #throttle-zone { position:fixed; bottom:16px; right:80px; z-index:30; width:44px; }
     #thr-label { text-align:center; font-size:9px; color:rgba(0,255,136,0.5);
       letter-spacing:1px; margin-bottom:4px; }
@@ -119,7 +107,6 @@
     #thr-pct { text-align:center; font-size:11px; color:#00ff88;
       text-shadow:0 0 6px #00ff88; margin-top:4px; }
 
-    /* ── Buttons ── */
     #ctrl-btns { position:fixed; bottom:16px; right:12px; z-index:30;
       display:flex; flex-direction:column; gap:7px; width:60px; }
     .ctrl-btn { width:60px; height:38px; border-radius:7px;
@@ -130,15 +117,39 @@
     .ctrl-btn.on { border-color:#ffcc00; color:#ffcc00;
       background:rgba(255,200,0,0.15); box-shadow:0 0 10px rgba(255,200,0,0.2); }
 
-    /* Desktop hint */
     #hint { position:fixed; top:50%; right:12px; transform:translateY(-50%);
       z-index:20; pointer-events:none; color:rgba(0,255,136,0.35);
       font-size:9px; line-height:2.2; text-align:right; padding:6px 10px; }
+
+    #loc-modal {
+      position:fixed; inset:0; z-index:300;
+      background:rgba(0,0,0,0.88);
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center; gap:8px; padding:20px; }
+    #loc-modal.show { display:flex; }
+    #loc-modal h3 { color:#00ccff; font-size:12px; letter-spacing:4px; margin-bottom:4px; }
+    .loc-btn {
+      width:240px; padding:10px 14px;
+      background:rgba(0,15,40,0.95); border:1px solid rgba(0,180,255,0.3);
+      color:#00ccff; font-family:'Courier New',monospace; font-size:11px;
+      border-radius:6px; cursor:pointer; text-align:left; letter-spacing:1px;
+      pointer-events:auto; }
+    .loc-btn:active { background:rgba(0,60,120,0.95); }
+    .loc-sub { font-size:9px; color:rgba(0,180,255,0.45); margin-top:1px; display:block; }
+    #loc-cancel { margin-top:6px; color:rgba(255,255,255,0.35); font-size:10px;
+      background:none; border:none; cursor:pointer; letter-spacing:2px;
+      font-family:'Courier New',monospace; pointer-events:auto; }
+
+    #alt-zone { position:fixed; bottom:62px; left:172px; z-index:30;
+      display:flex; flex-direction:column; gap:5px; }
+    .alt-btn { width:40px; height:40px; border-radius:6px;
+      border:1px solid rgba(0,255,136,0.28); background:rgba(0,0,0,0.6);
+      color:#00ff88; font-size:18px; line-height:1; cursor:pointer;
+      font-family:'Courier New',monospace; pointer-events:auto; }
   </style>
 </head>
 <body>
 
-<!-- Loading screen -->
 <div id="loading">
   <div class="logo">✈</div>
   <h1>3D FLIGHT SIMULATOR</h1>
@@ -147,13 +158,9 @@
   <div id="loading-msg">地形データを読み込み中...</div>
 </div>
 
-<!-- Cesium 3D globe -->
 <div id="cesiumContainer"></div>
-
-<!-- Cockpit frame -->
 <div id="cockpit"></div>
 
-<!-- HUD -->
 <div id="hud">
   <div id="hud-top" class="glass">
     <div id="hud-title">3D WORLD FLIGHT SIMULATOR</div>
@@ -188,25 +195,18 @@
 
   <svg id="pitch-ladder" width="220" height="180" viewBox="-110 -90 220 180"
        style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;">
-    <!-- Horizon -->
     <line x1="-90" y1="0" x2="-22" y2="0" stroke="#00ff88" stroke-width="2" opacity="0.8"/>
     <line x1="22"  y1="0" x2="90"  y2="0" stroke="#00ff88" stroke-width="2" opacity="0.8"/>
-    <!-- +5° -->
     <line x1="-38" y1="-18" x2="38" y2="-18" stroke="#00ff88" stroke-width="0.9" opacity="0.5"/>
     <text x="42" y="-15" font-size="9" fill="#00ff88" opacity="0.6" font-family="Courier New">5</text>
-    <!-- +10° -->
     <line x1="-60" y1="-36" x2="60" y2="-36" stroke="#00ff88" stroke-width="0.9" opacity="0.5"/>
     <text x="64" y="-33" font-size="9" fill="#00ff88" opacity="0.6" font-family="Courier New">10</text>
-    <!-- +20° -->
     <line x1="-60" y1="-72" x2="60" y2="-72" stroke="#00ff88" stroke-width="0.9" opacity="0.4"/>
     <text x="64" y="-69" font-size="9" fill="#00ff88" opacity="0.5" font-family="Courier New">20</text>
-    <!-- -5° -->
     <line x1="-38" y1="18" x2="38" y2="18" stroke="#00ff88" stroke-width="0.9" opacity="0.5"/>
     <text x="42" y="21" font-size="9" fill="#00ff88" opacity="0.6" font-family="Courier New">-5</text>
-    <!-- -10° -->
     <line x1="-60" y1="36" x2="60" y2="36" stroke="#00ff88" stroke-width="0.9" opacity="0.5"/>
     <text x="64" y="39" font-size="9" fill="#00ff88" opacity="0.6" font-family="Courier New">-10</text>
-    <!-- Aircraft reference -->
     <line x1="-36" y1="0" x2="-12" y2="0" stroke="#ffff00" stroke-width="2.5"/>
     <line x1="12"  y1="0" x2="36"  y2="0" stroke="#ffff00" stroke-width="2.5"/>
     <circle cx="0" cy="0" r="3.5" fill="none" stroke="#ffff00" stroke-width="2"/>
@@ -216,13 +216,20 @@
   <div id="terrain-warn">⚠ PULL UP ⚠</div>
 </div>
 
-<!-- Joystick -->
+<div id="loc-modal">
+  <h3>SPAWN LOCATION</h3>
+</div>
+
 <div id="joystick-zone">
   <div id="joystick-base"><div id="joystick-knob"></div></div>
   <div id="joystick-label">PITCH / BANK</div>
 </div>
 
-<!-- Throttle -->
+<div id="alt-zone">
+  <button class="alt-btn" id="btn-alt-up">▲</button>
+  <button class="alt-btn" id="btn-alt-dn">▼</button>
+</div>
+
 <div id="throttle-zone">
   <div id="thr-label">THR</div>
   <div id="throttle-track">
@@ -232,20 +239,21 @@
   <div id="thr-pct">55%</div>
 </div>
 
-<!-- Buttons -->
 <div id="ctrl-btns">
   <button class="ctrl-btn" id="btn-gear">GEAR↓</button>
   <button class="ctrl-btn" id="btn-flaps">FLAPS</button>
   <button class="ctrl-btn" id="btn-reset">RESET</button>
+  <button class="ctrl-btn" id="btn-loc">LOC</button>
 </div>
 
 <div id="hint" class="glass">
   W/S ピッチ<br>
   A/D バンク<br>
   +/− スロットル<br>
+  Q/E 高度±<br>
   R リセット
 </div>
 
-<script src="js/simulator.js"></script>
+<script src="js/simulator.js?v=5"></script>
 </body>
 </html>
