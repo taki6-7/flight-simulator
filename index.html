@@ -94,15 +94,17 @@
     @keyframes spin { to { transform:rotate(360deg); } }
 
     /* ── Joystick ── */
-    #joystick-zone { position:fixed; bottom:16px; left:16px; z-index:30; width:144px; }
-    #joystick-base { width:144px; height:144px; border-radius:50%;
-      background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.16); position:relative; }
-    #joystick-knob { width:54px; height:54px; border-radius:50%;
-      background:rgba(0,160,255,0.4); border:2px solid rgba(0,200,255,0.65);
+    #joystick-zone { position:fixed; bottom:0; left:0; z-index:30;
+      width:46vw; height:62vh; }
+    #joystick-base { width:130px; height:130px; border-radius:50%;
+      background:rgba(255,255,255,0.05); border:2px solid rgba(255,255,255,0.18);
+      position:absolute; pointer-events:none; opacity:0.5; transition:opacity 0.12s; }
+    #joystick-knob { width:58px; height:58px; border-radius:50%;
+      background:rgba(0,160,255,0.45); border:2px solid rgba(0,200,255,0.7);
       position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-      box-shadow:0 0 18px rgba(0,160,255,0.3); }
-    #joystick-label { text-align:center; color:rgba(255,255,255,0.3);
-      font-size:9px; letter-spacing:2px; margin-top:5px; }
+      box-shadow:0 0 20px rgba(0,160,255,0.35); pointer-events:none; }
+    #joystick-label { position:absolute; bottom:6px; width:100%; text-align:center;
+      color:rgba(255,255,255,0.2); font-size:9px; letter-spacing:2px; pointer-events:none; }
 
     /* ── Throttle ── */
     #throttle-zone { position:fixed; bottom:16px; right:80px; z-index:30; width:44px; }
@@ -274,6 +276,6 @@
   <button class="ctrl-btn" id="btn-loc">LOC</button>
 </div>
 
-<script src="js/simulator.js?v=6"></script>
+<script src="js/simulator.js?v=7"></script>
 </body>
 </html>

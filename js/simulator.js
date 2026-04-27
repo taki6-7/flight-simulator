@@ -121,12 +121,12 @@ class FlightSimulator {
     // Bank
     s.bank += inp.bank * 45 * dt;
     s.bank  = Math.max(-55, Math.min(55, s.bank));
-    if (inp.bank === 0) s.bank *= Math.pow(0.82, dt * 60);
+    if (inp.bank === 0) s.bank *= Math.pow(0.94, dt * 60);
 
     // Pitch
     s.pitch += inp.pitch * 22 * dt;
     s.pitch  = Math.max(-35, Math.min(40, s.pitch));
-    if (inp.pitch === 0) s.pitch *= Math.pow(0.88, dt * 60);
+    if (inp.pitch === 0) s.pitch *= Math.pow(0.96, dt * 60);
 
     // Coordinated turn
     const bankRad = s.bank * Math.PI / 180;
@@ -233,44 +233,66 @@ class FlightSimulator {
 
   // ── Joystick ──────────────────────────────────────────────────────────────
   _initJoystick() {
+    const zone = document.getElementById('joystick-zone');
     const base = document.getElementById('joystick-base');
     const knob = document.getElementById('joystick-knob');
-    const maxR = 45;
+    const maxR = 55;
     let aid = null, cx = 0, cy = 0;
+
+    const resetBase = () => {
+      const zr = zone.getBoundingClientRect();
+      base.style.left    = '16px';
+      base.style.top     = (zr.height - 146) + 'px';
+      base.style.opacity = '0.5';
+      knob.style.transform = 'translate(-50%,-50%)';
+    };
+    resetBase();
+    window.addEventListener('resize', resetBase);
 
     const start = (e) => {
       e.preventDefault();
       const t = e.touches ? e.touches[0] : e;
-      const r = base.getBoundingClientRect();
-      cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+      cx = t.clientX; cy = t.clientY;
+      const zr = zone.getBoundingClientRect();
+      base.style.left    = (cx - zr.left - 65) + 'px';
+      base.style.top     = (cy - zr.top  - 65) + 'px';
+      base.style.opacity = '0.85';
       aid = e.touches ? t.identifier : 'mouse';
     };
+
     const move = (e) => {
       e.preventDefault();
       if (aid === null) return;
       const t = e.touches ? [...e.touches].find(x => x.identifier === aid) : e;
       if (!t) return;
       const dx = t.clientX - cx, dy = t.clientY - cy;
-      const d = Math.min(Math.sqrt(dx*dx + dy*dy), maxR);
-      const a = Math.atan2(dy, dx);
-      const ox = Math.cos(a) * d, oy = Math.sin(a) * d;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const d  = Math.min(dist, maxR);
+      const ox = dist > 0 ? (dx / dist) * d : 0;
+      const oy = dist > 0 ? (dy / dist) * d : 0;
       knob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
       this.input.bank  =  ox / maxR;
       this.input.pitch = -oy / maxR;
     };
+
     const end = (e) => {
-      e.preventDefault(); aid = null;
-      knob.style.transform = 'translate(-50%,-50%)';
+      if (aid === null) return;
+      if (e.changedTouches) {
+        const match = [...e.changedTouches].some(t => t.identifier === aid);
+        if (!match) return;
+      }
+      aid = null;
       this.input.bank = this.input.pitch = 0;
+      resetBase();
     };
 
-    base.addEventListener('touchstart',  start, { passive: false });
-    base.addEventListener('touchmove',   move,  { passive: false });
-    base.addEventListener('touchend',    end,   { passive: false });
-    base.addEventListener('touchcancel', end,   { passive: false });
-    base.addEventListener('mousedown',   start);
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup',   end);
+    zone.addEventListener('touchstart',    start, { passive: false });
+    window.addEventListener('touchmove',   move,  { passive: false });
+    window.addEventListener('touchend',    end,   { passive: false });
+    window.addEventListener('touchcancel', end,   { passive: false });
+    zone.addEventListener('mousedown',     start);
+    window.addEventListener('mousemove',   move);
+    window.addEventListener('mouseup',     end);
   }
 
   // ── Throttle ──────────────────────────────────────────────────────────────
