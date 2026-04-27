@@ -25,8 +25,6 @@ class FlightSimulator {
       bank: 0,
       throttle: 0.45,
       vs: 0,
-      flaps: false,
-      gear: true,
       stall: false,
     };
     this.input   = { pitch: 0, bank: 0, altAdj: 0 };
@@ -344,25 +342,9 @@ class FlightSimulator {
 
   // ── Buttons ───────────────────────────────────────────────────────────────
   _initButtons() {
-    const g = document.getElementById('btn-gear');
-    const f = document.getElementById('btn-flaps');
-
-    g.addEventListener('click', () => {
-      this.state.gear = !this.state.gear;
-      g.textContent = this.state.gear ? 'GEAR↓' : 'GEAR↑';
-      g.classList.toggle('on', !this.state.gear);
-    });
-    f.addEventListener('click', () => {
-      this.state.flaps = !this.state.flaps;
-      f.textContent = this.state.flaps ? 'FLAP 1' : 'FLAPS';
-      f.classList.toggle('on', this.state.flaps);
-    });
     document.getElementById('btn-reset').addEventListener('click', () => {
       this._teleport(LOCATIONS[0]);
-      g.textContent = 'GEAR↓'; g.classList.remove('on');
-      f.textContent = 'FLAPS'; f.classList.remove('on');
     });
-
     document.getElementById('btn-loc').addEventListener('click', () => {
       document.getElementById('loc-modal').classList.add('show');
     });

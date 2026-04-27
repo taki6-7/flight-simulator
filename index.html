@@ -121,19 +121,14 @@
 
     /* ── Buttons ── */
     #ctrl-btns { position:fixed; bottom:16px; right:12px; z-index:30;
-      display:flex; flex-direction:column; gap:7px; width:60px; }
-    .ctrl-btn { width:60px; height:38px; border-radius:7px;
-      border:1px solid rgba(255,255,255,0.22); background:rgba(0,0,0,0.55);
-      color:rgba(255,255,255,0.6); font-size:9px; letter-spacing:1px;
+      display:flex; flex-direction:column; gap:8px; width:66px; }
+    .ctrl-btn { width:66px; height:50px; border-radius:10px;
+      border:1px solid rgba(255,255,255,0.22); background:rgba(0,0,0,0.6);
+      color:rgba(255,255,255,0.7); font-size:10px; letter-spacing:1px;
       font-family:'Courier New',monospace; cursor:pointer;
       backdrop-filter:blur(4px); pointer-events:auto; }
     .ctrl-btn.on { border-color:#ffcc00; color:#ffcc00;
       background:rgba(255,200,0,0.15); box-shadow:0 0 10px rgba(255,200,0,0.2); }
-
-    /* Desktop hint */
-    #hint { position:fixed; top:50%; right:12px; transform:translateY(-50%);
-      z-index:20; pointer-events:none; color:rgba(0,255,136,0.35);
-      font-size:9px; line-height:2.2; text-align:right; padding:6px 10px; }
 
     /* ── Location modal ── */
     #loc-modal {
@@ -156,11 +151,12 @@
       font-family:'Courier New',monospace; pointer-events:auto; }
 
     /* ── Altitude buttons ── */
-    #alt-zone { position:fixed; bottom:62px; left:172px; z-index:30;
-      display:flex; flex-direction:column; gap:5px; }
-    .alt-btn { width:40px; height:40px; border-radius:6px;
-      border:1px solid rgba(0,255,136,0.28); background:rgba(0,0,0,0.6);
-      color:#00ff88; font-size:18px; line-height:1; cursor:pointer;
+    #alt-zone { position:fixed; bottom:20px; left:172px; z-index:30;
+      display:flex; flex-direction:column; gap:3px; align-items:center; }
+    #alt-label { font-size:8px; color:rgba(0,255,136,0.4); letter-spacing:1px; margin:1px 0; }
+    .alt-btn { width:48px; height:52px; border-radius:10px;
+      border:1px solid rgba(0,255,136,0.3); background:rgba(0,0,0,0.65);
+      color:#00ff88; font-size:22px; line-height:1; cursor:pointer;
       font-family:'Courier New',monospace; pointer-events:auto; }
   </style>
 </head>
@@ -258,6 +254,7 @@
 <!-- Altitude buttons -->
 <div id="alt-zone">
   <button class="alt-btn" id="btn-alt-up">▲</button>
+  <div id="alt-label">ALT</div>
   <button class="alt-btn" id="btn-alt-dn">▼</button>
 </div>
 
@@ -273,20 +270,10 @@
 
 <!-- Buttons -->
 <div id="ctrl-btns">
-  <button class="ctrl-btn" id="btn-gear">GEAR↓</button>
-  <button class="ctrl-btn" id="btn-flaps">FLAPS</button>
   <button class="ctrl-btn" id="btn-reset">RESET</button>
   <button class="ctrl-btn" id="btn-loc">LOC</button>
 </div>
 
-<div id="hint" class="glass">
-  W/S ピッチ<br>
-  A/D バンク<br>
-  +/− スロットル<br>
-  Q/E 高度±<br>
-  R リセット
-</div>
-
-<script src="js/simulator.js?v=5"></script>
+<script src="js/simulator.js?v=6"></script>
 </body>
 </html>
