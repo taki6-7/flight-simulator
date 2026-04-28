@@ -48,10 +48,15 @@ class FlightSimulator {
 
     try {
       loadingMsg.textContent = '3D地形データを取得中...';
-      const terrainProvider = await Cesium.createWorldTerrainAsync({
-        requestWaterMask:    true,
-        requestVertexNormals: true,
-      });
+      let terrainProvider;
+      try {
+        terrainProvider = await Cesium.createWorldTerrainAsync({
+          requestWaterMask:    true,
+          requestVertexNormals: true,
+        });
+      } catch (_) {
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+      }
 
       loadingMsg.textContent = '衛星画像を読み込み中...';
       this.viewer = new Cesium.Viewer('cesiumContainer', {
@@ -116,7 +121,8 @@ class FlightSimulator {
       });
 
     } catch (e) {
-      loadingMsg.textContent = 'エラー: ' + e.message;
+      loadingMsg.textContent = 'エラー: ' + (e?.message || String(e));
+      console.error('Cesium init failed:', e);
     }
   }
 
