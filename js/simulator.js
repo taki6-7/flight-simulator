@@ -2,26 +2,15 @@
 
 const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4MGViMDBiNC0wMzM4LTQ3OGEtOTgzOC05NzVjNWJmYjNkNmEiLCJpZCI6NDIzNjgxLCJpYXQiOjE3NzcxODU4NTl9.IrAO4qaQUBLFli4ennYEX79ONLZVhKDAXUS2w6MhrHg';
 
-const LOCATIONS = [
-  { name: '富士山',           sub: 'MT. FUJI, JAPAN',        lat:35.60, lng:138.78, alt:1200, heading:185 },
-  { name: '東京湾',           sub: 'TOKYO BAY, JAPAN',        lat:35.65, lng:139.85, alt:700,  heading:220 },
-  { name: '立山連峰',         sub: 'TATEYAMA, JAPAN',         lat:36.55, lng:137.52, alt:3000, heading:110 },
-  { name: 'ハワイ',           sub: 'HAWAII, USA',             lat:19.82, lng:-155.47,alt:1500, heading:300 },
-  { name: 'グランドキャニオン', sub: 'GRAND CANYON, USA',      lat:36.10, lng:-112.10,alt:2200, heading:175 },
-  { name: 'ヒマラヤ',         sub: 'HIMALAYAS',               lat:27.99, lng:86.93,  alt:4500, heading:90  },
-  { name: 'アルプス',         sub: 'ALPS, EUROPE',            lat:45.98, lng:7.65,   alt:2500, heading:200 },
-  { name: 'パタゴニア',       sub: 'PATAGONIA',               lat:-50.96,lng:-73.15, alt:1500, heading:0   },
-];
-
 class FlightSimulator {
   constructor() {
     this.state = {
-      lat: 35.42,
+      lat: 35.42,       // 富士山西側からスタート
       lng: 138.52,
-      alt: 2400,
-      speed: 85,
-      heading: 110,
-      pitch: -4,
+      alt: 2400,        // 2400m高度
+      speed: 85,        // m/s
+      heading: 110,     // 東南東（富士山に向かう）
+      pitch: -4,        // やや機首下げ（地形が見える）
       bank: 0,
       throttle: 0.45,
       vs: 0,
@@ -29,43 +18,60 @@ class FlightSimulator {
       gear: true,
       stall: false,
     };
-    this.input  = { pitch: 0, bank: 0, altAdj: 0 };
-    this.viewer = null;
-    this.lastT  = null;
+    this.input   = { pitch: 0, bank: 0 };
+    this.viewer  = null;
+    this.lastT   = null;
 
     this._buildCompassTape();
     this._initJoystick();
     this._initThrottle();
     this._initButtons();
-    this._initAltButtons();
-    this._initLocModal();
     this._initCesium();
   }
 
+  // ── Cesium 3D Globe ───────────────────────────────────────────────────────
   async _initCesium() {
     Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+
     const loadingMsg = document.getElementById('loading-msg');
+
     try {
       loadingMsg.textContent = '3D地形データを取得中...';
       const terrainProvider = await Cesium.createWorldTerrainAsync({
-        requestWaterMask: true, requestVertexNormals: true,
+        requestWaterMask:    true,
+        requestVertexNormals: true,
       });
+
       loadingMsg.textContent = '衛星画像を読み込み中...';
       this.viewer = new Cesium.Viewer('cesiumContainer', {
         terrainProvider,
-        animation: false, baseLayerPicker: false, fullscreenButton: false,
-        geocoder: false, homeButton: false, infoBox: false,
-        sceneModePicker: false, selectionIndicator: false, timeline: false,
-        navigationHelpButton: false, navigationInstructionsInitiallyVisible: false,
-        requestRenderMode: false, shadows: false,
+        animation:                          false,
+        baseLayerPicker:                    false,
+        fullscreenButton:                   false,
+        geocoder:                           false,
+        homeButton:                         false,
+        infoBox:                            false,
+        sceneModePicker:                    false,
+        selectionIndicator:                 false,
+        timeline:                           false,
+        navigationHelpButton:               false,
+        navigationInstructionsInitiallyVisible: false,
+        requestRenderMode:                  false,
+        shadows:                            false,
       });
 
+      // Disable default camera controller
       const ssc = this.viewer.scene.screenSpaceCameraController;
-      ssc.enableRotate = ssc.enableTranslate = ssc.enableZoom = ssc.enableTilt = ssc.enableLook = false;
+      ssc.enableRotate    = false;
+      ssc.enableTranslate = false;
+      ssc.enableZoom      = false;
+      ssc.enableTilt      = false;
+      ssc.enableLook      = false;
 
+      // Visual settings
       this.viewer.scene.globe.depthTestAgainstTerrain = true;
       this.viewer.scene.globe.enableLighting          = true;
-      this.viewer.scene.verticalExaggeration          = 2.5;
+      this.viewer.scene.verticalExaggeration           = 2.5;
       this.viewer.scene.fog.enabled                   = true;
       this.viewer.scene.fog.density                   = 0.00002;
       this.viewer.scene.skyAtmosphere.show            = true;
@@ -73,11 +79,16 @@ class FlightSimulator {
       this.viewer.scene.moon.show                     = true;
       this.viewer.scene.skyBox.show                   = true;
 
+      // FOV (視野角)
       const frustum = this.viewer.camera.frustum;
-      if (frustum.fov !== undefined) frustum.fov = Cesium.Math.toRadians(78);
+      if (frustum.fov !== undefined) {
+        frustum.fov = Cesium.Math.toRadians(78);
+      }
 
+      // Hide loading screen
       document.getElementById('loading').style.display = 'none';
 
+      // Game loop via postRender (syncs with Cesium render cycle)
       this.viewer.scene.postRender.addEventListener(() => {
         const now = performance.now();
         if (this.lastT === null) { this.lastT = now; return; }
@@ -86,40 +97,46 @@ class FlightSimulator {
         this._update(dt);
         this._render();
       });
+
     } catch (e) {
       loadingMsg.textContent = 'エラー: ' + e.message;
     }
   }
 
+  // ── Physics ───────────────────────────────────────────────────────────────
   _update(dt) {
     const s = this.state, inp = this.input;
 
+    // Bank
     s.bank += inp.bank * 45 * dt;
     s.bank  = Math.max(-55, Math.min(55, s.bank));
     if (inp.bank === 0) s.bank *= Math.pow(0.82, dt * 60);
 
+    // Pitch
     s.pitch += inp.pitch * 22 * dt;
     s.pitch  = Math.max(-35, Math.min(40, s.pitch));
     if (inp.pitch === 0) s.pitch *= Math.pow(0.88, dt * 60);
 
+    // Coordinated turn
     const bankRad = s.bank * Math.PI / 180;
     s.heading = (s.heading + (s.speed / 9.81) * Math.tan(bankRad) * (180 / Math.PI) * dt + 360) % 360;
 
+    // Speed from throttle (40〜260 m/s)
     s.speed += (s.throttle * 220 + 40 - s.speed) * Math.min(dt * 0.3, 1);
 
+    // Stall
     s.stall = s.speed < 60 && s.alt > 100;
     if (s.stall) s.pitch -= 10 * dt;
 
+    // Vertical speed & altitude
     s.vs  = Math.sin(s.pitch * Math.PI / 180) * s.speed * Math.cos(bankRad);
     s.alt = Math.max(50, Math.min(13000, s.alt + s.vs * dt));
 
-    if (inp.altAdj !== 0) {
-      s.alt = Math.max(50, Math.min(13000, s.alt + inp.altAdj * 120 * dt));
-    }
-
+    // Terrain proximity warning (below 300m and descending)
     const terrainWarn = s.alt < 300 && s.vs < -5;
     document.getElementById('terrain-warn').style.display = terrainWarn ? 'block' : 'none';
 
+    // Move position
     const hRad = s.heading * Math.PI / 180;
     const lRad = s.lat     * Math.PI / 180;
     const d    = s.speed * dt;
@@ -130,10 +147,12 @@ class FlightSimulator {
     s.lat = Math.max(-85, Math.min(85, s.lat));
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   _render() {
     const s = this.state;
     if (!this.viewer) return;
 
+    // ── Cesium camera = cockpit view ──────────────────────────────────────
     this.viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(s.lng, s.lat, s.alt + 3),
       orientation: {
@@ -143,9 +162,11 @@ class FlightSimulator {
       },
     });
 
+    // ── Pitch ladder (rolls counter to bank, shifts with pitch) ──────────
     document.getElementById('pitch-ladder').style.transform =
       `translate(-50%,-50%) rotate(${(-s.bank).toFixed(2)}deg) translateY(${(s.pitch * 3.8).toFixed(1)}px)`;
 
+    // ── HUD values ────────────────────────────────────────────────────────
     document.getElementById('hud-spd').textContent  = (s.speed * 1.944).toFixed(0);
     document.getElementById('hud-mach').textContent = (s.speed / 340).toFixed(2);
     document.getElementById('hud-alt').textContent  = Math.round(s.alt);
@@ -164,6 +185,7 @@ class FlightSimulator {
     document.getElementById('thr-pct').textContent          = `${Math.round(s.throttle * 100)}%`;
   }
 
+  // ── Compass ───────────────────────────────────────────────────────────────
   _buildCompassTape() {
     const marks = [
       [0,'N'],[30,'30'],[45,'NE'],[60,'60'],[90,'E'],
@@ -193,6 +215,7 @@ class FlightSimulator {
       `${String(hdg).padStart(3,'0')}°  ${cards[Math.round(hdg / 22.5) % 16]}`;
   }
 
+  // ── Joystick ──────────────────────────────────────────────────────────────
   _initJoystick() {
     const base = document.getElementById('joystick-base');
     const knob = document.getElementById('joystick-knob');
@@ -234,6 +257,7 @@ class FlightSimulator {
     window.addEventListener('mouseup',   end);
   }
 
+  // ── Throttle ──────────────────────────────────────────────────────────────
   _initThrottle() {
     const track = document.getElementById('throttle-track');
     let drag = false;
@@ -252,45 +276,7 @@ class FlightSimulator {
     window.addEventListener('mouseup',    end);
   }
 
-  _initAltButtons() {
-    const up = document.getElementById('btn-alt-up');
-    const dn = document.getElementById('btn-alt-dn');
-    const set  = (v) => { this.input.altAdj = v; };
-    const stop = ()  => { this.input.altAdj = 0; };
-    for (const [btn, val] of [[up, 1], [dn, -1]]) {
-      btn.addEventListener('touchstart',  (e) => { e.preventDefault(); set(val); }, { passive: false });
-      btn.addEventListener('touchend',    (e) => { e.preventDefault(); stop(); },   { passive: false });
-      btn.addEventListener('touchcancel', (e) => { e.preventDefault(); stop(); },   { passive: false });
-      btn.addEventListener('mousedown',  () => set(val));
-      btn.addEventListener('mouseup',    stop);
-      btn.addEventListener('mouseleave', stop);
-    }
-  }
-
-  _initLocModal() {
-    const modal = document.getElementById('loc-modal');
-    for (const loc of LOCATIONS) {
-      const btn = document.createElement('button');
-      btn.className = 'loc-btn';
-      btn.innerHTML = `${loc.name}<span class="loc-sub">${loc.sub}</span>`;
-      btn.addEventListener('click', () => { this._teleport(loc); modal.classList.remove('show'); });
-      modal.appendChild(btn);
-    }
-    const cancel = document.createElement('button');
-    cancel.id = 'loc-cancel';
-    cancel.textContent = '[ CANCEL ]';
-    cancel.addEventListener('click', () => modal.classList.remove('show'));
-    modal.appendChild(cancel);
-  }
-
-  _teleport(loc) {
-    Object.assign(this.state, {
-      lat: loc.lat, lng: loc.lng, alt: loc.alt,
-      heading: loc.heading, pitch: 0, bank: 0,
-      speed: 70, throttle: 0.38, vs: 0, stall: false,
-    });
-  }
-
+  // ── Buttons ───────────────────────────────────────────────────────────────
   _initButtons() {
     const g = document.getElementById('btn-gear');
     const f = document.getElementById('btn-flaps');
@@ -306,27 +292,33 @@ class FlightSimulator {
       f.classList.toggle('on', this.state.flaps);
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
-      this._teleport(LOCATIONS[0]);
+      Object.assign(this.state, {
+        lat: 35.42, lng: 138.52, alt: 2400,
+        speed: 85, heading: 110, pitch: -4, bank: 0,
+        throttle: 0.45, vs: 0, stall: false,
+      });
       g.textContent = 'GEAR↓'; g.classList.remove('on');
       f.textContent = 'FLAPS'; f.classList.remove('on');
-    });
-    document.getElementById('btn-loc').addEventListener('click', () => {
-      document.getElementById('loc-modal').classList.add('show');
     });
   }
 }
 
+// ── Keyboard (PC) ─────────────────────────────────────────────────────────────
 function setupKeyboard(sim) {
   const h = {};
   window.addEventListener('keydown', e => { h[e.key] = true; });
   window.addEventListener('keyup',   e => { h[e.key] = false; });
   setInterval(() => {
-    sim.input.pitch  = (h['s'] || h['ArrowDown']  ? 1 : 0) - (h['w'] || h['ArrowUp']    ? 1 : 0);
-    sim.input.bank   = (h['d'] || h['ArrowRight'] ? 1 : 0) - (h['a'] || h['ArrowLeft']  ? 1 : 0);
-    sim.input.altAdj = (h['q'] ? 1 : 0) - (h['e'] ? 1 : 0);
+    sim.input.pitch = (h['s'] || h['ArrowDown']  ? 1 : 0) - (h['w'] || h['ArrowUp']    ? 1 : 0);
+    sim.input.bank  = (h['d'] || h['ArrowRight'] ? 1 : 0) - (h['a'] || h['ArrowLeft']  ? 1 : 0);
     if (h['+'] || h['=']) sim.state.throttle = Math.min(1, sim.state.throttle + 0.006);
     if (h['-'] || h['_']) sim.state.throttle = Math.max(0, sim.state.throttle - 0.006);
-    if (h['r']) { sim._teleport(LOCATIONS[0]); delete h['r']; }
+    if (h['r']) {
+      sim.state.lat = 35.42; sim.state.lng = 138.52;
+      sim.state.alt = 2400; sim.state.speed = 85;
+      sim.state.heading = 110; sim.state.pitch = -4;
+      delete h['r'];
+    }
   }, 16);
 }
 
