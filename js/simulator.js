@@ -3,8 +3,8 @@
 const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4MGViMDBiNC0wMzM4LTQ3OGEtOTgzOC05NzVjNWJmYjNkNmEiLCJpZCI6NDIzNjgxLCJpYXQiOjE3NzcxODU4NTl9.IrAO4qaQUBLFli4ennYEX79ONLZVhKDAXUS2w6MhrHg';
 
 const LOCATIONS = [
+  { name: '東京',             sub: 'TOKYO, JAPAN',           lat:35.69, lng:139.76, alt:500,  heading:90  },
   { name: '富士山',           sub: 'MT. FUJI, JAPAN',        lat:35.60, lng:138.78, alt:1200, heading:185 },
-  { name: '東京湾',           sub: 'TOKYO BAY, JAPAN',        lat:35.65, lng:139.85, alt:700,  heading:220 },
   { name: '立山連峰',         sub: 'TATEYAMA, JAPAN',         lat:36.55, lng:137.52, alt:3000, heading:110 },
   { name: 'ハワイ',           sub: 'HAWAII, USA',             lat:19.82, lng:-155.47,alt:1500, heading:300 },
   { name: 'グランドキャニオン', sub: 'GRAND CANYON, USA',      lat:36.10, lng:-112.10,alt:2200, heading:175 },
@@ -16,14 +16,14 @@ const LOCATIONS = [
 class FlightSimulator {
   constructor() {
     this.state = {
-      lat: 35.42,       // 富士山西側からスタート
-      lng: 138.52,
-      alt: 2400,        // 2400m高度
-      speed: 85,        // m/s
-      heading: 110,     // 東南東（富士山に向かう）
-      pitch: -4,        // やや機首下げ（地形が見える）
+      lat: 35.69,       // 東京・新宿上空からスタート
+      lng: 139.76,
+      alt: 500,         // 500m（ビルが見える高度）
+      speed: 70,        // m/s
+      heading: 90,      // 東向き
+      pitch: 0,
       bank: 0,
-      throttle: 0.45,
+      throttle: 0.38,
       vs: 0,
       stall: false,
     };
@@ -78,6 +78,12 @@ class FlightSimulator {
       ssc.enableZoom      = false;
       ssc.enableTilt      = false;
       ssc.enableLook      = false;
+
+      // 3D Buildings (OpenStreetMap)
+      try {
+        const buildings = await Cesium.createOsmBuildingsAsync();
+        this.viewer.scene.primitives.add(buildings);
+      } catch (_) {}
 
       // Visual settings
       this.viewer.scene.globe.depthTestAgainstTerrain = true;
