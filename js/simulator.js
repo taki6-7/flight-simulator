@@ -48,10 +48,15 @@ class FlightSimulator {
 
     try {
       loadingMsg.textContent = '3D地形データを取得中...';
-      const terrainProvider = await Cesium.createWorldTerrainAsync({
-        requestWaterMask:    true,
-        requestVertexNormals: true,
-      });
+      let terrainProvider;
+      try {
+        terrainProvider = await Cesium.createWorldTerrainAsync({
+          requestWaterMask:    true,
+          requestVertexNormals: true,
+        });
+      } catch (_) {
+        terrainProvider = new Cesium.EllipsoidTerrainProvider();
+      }
 
       loadingMsg.textContent = '衛星画像を読み込み中...';
       this.viewer = new Cesium.Viewer('cesiumContainer', {
@@ -116,7 +121,8 @@ class FlightSimulator {
       });
 
     } catch (e) {
-      loadingMsg.textContent = 'エラー: ' + e.message;
+      loadingMsg.textContent = 'エラー: ' + (e?.message || String(e));
+      console.error('Cesium init failed:', e);
     }
   }
 
@@ -125,18 +131,19 @@ class FlightSimulator {
     const s = this.state, inp = this.input;
 
     // Bank
-    s.bank += inp.bank * 45 * dt;
-    s.bank  = Math.max(-55, Math.min(55, s.bank));
-    if (inp.bank === 0) s.bank *= Math.pow(0.94, dt * 60);
+    s.bank += inp.bank * 55 * dt;
+    s.bank  = Math.max(-65, Math.min(65, s.bank));
+    if (inp.bank === 0) s.bank *= Math.pow(0.995, dt * 60);
 
     // Pitch
-    s.pitch += inp.pitch * 22 * dt;
+    s.pitch += inp.pitch * 50 * dt;
     s.pitch  = Math.max(-35, Math.min(40, s.pitch));
-    if (inp.pitch === 0) s.pitch *= Math.pow(0.96, dt * 60);
+    if (inp.pitch === 0) s.pitch *= Math.pow(0.995, dt * 60);
 
-    // Coordinated turn
+    // Coordinated turn (fixed: was speed/g, correct is g/speed)
     const bankRad = s.bank * Math.PI / 180;
-    s.heading = (s.heading + (s.speed / 9.81) * Math.tan(bankRad) * (180 / Math.PI) * dt + 360) % 360;
+    const turnRate = s.speed > 0 ? 3 * (9.81 / s.speed) * Math.tan(bankRad) * (180 / Math.PI) : 0;
+    s.heading = (s.heading + turnRate * dt + 360) % 360;
 
     // Speed from throttle (40〜260 m/s)
     s.speed += (s.throttle * 220 + 40 - s.speed) * Math.min(dt * 0.3, 1);
